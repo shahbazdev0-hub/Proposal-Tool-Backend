@@ -7,6 +7,7 @@ import { PackagesModule } from '../packages/packages.module';
 import { AddersModule } from '../adders/adders.module';
 import { FinanciersModule } from '../financiers/financiers.module';
 import { UsersModule } from '../users/users.module';
+import { EmailModule } from '../email/email.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { UsersModule } from '../users/users.module';
     AddersModule,
     FinanciersModule,
     UsersModule,
+    EmailModule,
   ],
   controllers: [SalesController],
   providers: [SalesService],

@@ -15,6 +15,9 @@ export class User {
   @Prop({ trim: true })
   phone?: string;
 
+  @Prop({ trim: true })
+  office?: string;
+
   @Prop({ required: true, select: false })
   passwordHash: string;
 

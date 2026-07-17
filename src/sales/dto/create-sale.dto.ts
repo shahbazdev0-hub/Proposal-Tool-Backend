@@ -2,6 +2,7 @@ import {
   ArrayUnique,
   IsArray,
   IsDateString,
+  IsEmail,
   IsEnum,
   IsMongoId,
   IsNumber,
@@ -15,6 +16,10 @@ import { WaterType } from '../../common/enums/water-type.enum';
 export class CreateSaleDto {
   @IsString()
   customerName: string;
+
+  @IsOptional()
+  @IsEmail()
+  customerEmail?: string;
 
   @IsDateString()
   saleDate: string;

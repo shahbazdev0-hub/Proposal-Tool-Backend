@@ -1,6 +1,8 @@
-import { Body, Controller, ForbiddenException, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, ForbiddenException, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { SalesService } from './sales.service';
+import { EmailService } from '../email/email.service';
 import { CreateSaleDto } from './dto/create-sale.dto';
+import { UpdateSaleDto } from './dto/update-sale.dto';
 import { SalesQueryDto } from './dto/sales-query.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -23,7 +25,10 @@ const ROLE_SCOPE_FIELD: Partial<
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('sales')
 export class SalesController {
-  constructor(private readonly salesService: SalesService) {}
+  constructor(
+    private readonly salesService: SalesService,
+    private readonly emailService: EmailService,
+  ) {}
 
   @Roles(Role.ADMIN, Role.OPS)
   @Post()
@@ -55,8 +60,61 @@ export class SalesController {
   }
 
   @Roles(Role.ADMIN)
+  @Patch(':id')
+  async update(
+    @Param('id') id: string,
+    @Body() dto: UpdateSaleDto,
+  ) {
+    const sale = await this.salesService.update(id, dto);
+    return SalesService.sanitizeForRole(sale, Role.ADMIN);
+  }
+
+  @Roles(Role.ADMIN)
+  @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  remove(@Param('id') id: string) {
+    return this.salesService.remove(id);
+  }
+
+  @Roles(Role.ADMIN)
   @Patch(':id/paid')
   markPaid(@Param('id') id: string, @Body('paid') paid: boolean) {
     return this.salesService.markPaid(id, paid);
+  }
+
+  @Post(':id/email')
+  async sendEmail(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    const sale = await this.salesService.findById(id);
+
+    const scopeField = ROLE_SCOPE_FIELD[user.role];
+    if (scopeField) {
+      const scopedUser = sale[scopeField] as { _id?: { toString(): string } } | null;
+      if (scopedUser?._id?.toString() !== user.userId) {
+        throw new ForbiddenException("You don't have access to this sale");
+      }
+    }
+
+    if (!sale.customerEmail) {
+      throw new BadRequestException('This sale has no customer email address.');
+    }
+
+    const pkg = sale.package as unknown as { name: string };
+    const financier = sale.financier as unknown as { name: string } | null;
+    const salesRep = sale.salesRep as unknown as { name: string };
+
+    await this.emailService.sendSaleReceipt(sale.customerEmail, {
+      customerName: sale.customerName,
+      saleDate: sale.saleDate?.toISOString() ?? null,
+      installDate: sale.installDate?.toISOString() ?? null,
+      waterType: sale.waterType,
+      packageName: pkg?.name ?? '—',
+      financierName: financier?.name ?? null,
+      loanOptionLabel: sale.loanOptionLabel,
+      loanAmount: sale.loanAmount,
+      salesRepName: salesRep?.name ?? '—',
+      commissionsPaid: sale.commissionsPaid,
+    });
+
+    return { message: `Receipt sent to ${sale.customerEmail}` };
   }
 }

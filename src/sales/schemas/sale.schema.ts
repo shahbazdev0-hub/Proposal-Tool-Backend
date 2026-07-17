@@ -32,6 +32,9 @@ export class Sale {
   @Prop({ required: true, trim: true })
   customerName: string;
 
+  @Prop({ type: String, trim: true, default: null })
+  customerEmail: string | null;
+
   @Prop({ required: true })
   saleDate: Date;
 

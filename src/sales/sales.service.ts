@@ -3,6 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Sale, SaleDocument } from './schemas/sale.schema';
 import { CreateSaleDto } from './dto/create-sale.dto';
+import { UpdateSaleDto } from './dto/update-sale.dto';
 import { SalesQueryDto } from './dto/sales-query.dto';
 import { calculateCommission } from './commission-engine';
 import { PackagesService } from '../packages/packages.service';
@@ -131,6 +132,104 @@ export class SalesService {
       throw new NotFoundException('Sale not found');
     }
     return sale;
+  }
+
+  async update(id: string, dto: UpdateSaleDto): Promise<SaleDocument> {
+    const existing = await this.findById(id);
+
+    // Re-resolve package if changed, otherwise use existing
+    const pkgId = dto.package ?? existing.package?.toString();
+    const pkg = await this.packagesService.findById(pkgId);
+
+    if (dto.waterType && pkg.waterType !== dto.waterType) {
+      throw new BadRequestException(
+        `Package "${pkg.name}" belongs to water type "${pkg.waterType}", not "${dto.waterType}"`,
+      );
+    }
+
+    const adderIds = dto.adders ?? (existing.adders as unknown as string[]);
+    const adders = adderIds?.length ? await this.addersService.findByIds(adderIds) : [];
+    const addersTotal = adders.reduce((sum, a) => sum + a.price, 0);
+
+    const financierId = 'financier' in dto ? dto.financier : existing.financier?.toString();
+    let dealerFeePercent = existing.dealerFeePercent;
+    let loanOptionLabel = existing.loanOptionLabel;
+
+    if (financierId) {
+      const financier = await this.financiersService.findById(financierId);
+      const loanOptionId = dto.loanOptionId ?? existing.loanOptionLabel;
+      const loanOption = financier.loanOptions.find(
+        (lo) => lo._id?.toString() === (dto.loanOptionId ?? loanOptionId),
+      );
+      if (dto.loanOptionId && !loanOption) {
+        throw new NotFoundException('Loan option not found for the selected financier');
+      }
+      if (loanOption) {
+        dealerFeePercent = loanOption.dealerFeePercent;
+        loanOptionLabel = loanOption.label;
+      }
+    } else {
+      dealerFeePercent = 0;
+      loanOptionLabel = null;
+    }
+
+    const repId = dto.salesRep ?? existing.salesRep?.toString();
+    const salesRep = await this.usersService.findByIdLean(repId);
+
+    const toOid = (val: unknown): Types.ObjectId | null => {
+      if (!val) return null;
+      if (val instanceof Types.ObjectId) return val;
+      return new Types.ObjectId(val.toString());
+    };
+
+    const commissions = calculateCommission({
+      waterType: dto.waterType ?? existing.waterType,
+      package: {
+        price: pkg.price,
+        repCommissionFlat: pkg.repCommissionFlat,
+        overrides: pkg.overrides,
+        nickOverride: pkg.nickOverride,
+      },
+      loanAmount: dto.loanAmount ?? existing.loanAmount,
+      dealerFeePercent,
+      addersTotal,
+    });
+
+    const updated = await this.saleModel
+      .findByIdAndUpdate(
+        id,
+        {
+          customerName: dto.customerName ?? existing.customerName,
+          customerEmail: dto.customerEmail !== undefined ? dto.customerEmail : existing.customerEmail,
+          saleDate: dto.saleDate ?? existing.saleDate,
+          installDate: dto.installDate !== undefined ? dto.installDate : existing.installDate,
+          financier: financierId ? new Types.ObjectId(financierId) : null,
+          loanOptionLabel,
+          dealerFeePercent,
+          loanAmount: dto.loanAmount ?? existing.loanAmount,
+          waterType: dto.waterType ?? existing.waterType,
+          package: pkg._id,
+          adders: adders.map((a) => a._id),
+          addersTotal,
+          salesRep: salesRep._id,
+          directRecruiter: toOid(salesRep.directRecruiter),
+          teamLead: toOid(salesRep.teamLead),
+          regional: toOid(salesRep.regional),
+          partner: toOid(salesRep.partner),
+          commissions,
+        },
+        { new: true },
+      )
+      .populate(['package', 'adders', 'financier', 'salesRep', 'directRecruiter', 'teamLead', 'regional', 'partner'])
+      .exec();
+
+    if (!updated) throw new NotFoundException('Sale not found');
+    return updated;
+  }
+
+  async remove(id: string): Promise<void> {
+    const result = await this.saleModel.findByIdAndDelete(id).exec();
+    if (!result) throw new NotFoundException('Sale not found');
   }
 
   async markPaid(id: string, paid: boolean): Promise<SaleDocument> {
