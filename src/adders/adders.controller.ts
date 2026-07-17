@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { AddersService } from './adders.service';
 import { CreateAdderDto } from './dto/create-adder.dto';
 import { UpdateAdderDto } from './dto/update-adder.dto';
@@ -37,6 +37,7 @@ export class AddersController {
 
   @Roles(Role.ADMIN)
   @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
   remove(@Param('id') id: string) {
     return this.addersService.remove(id);
   }

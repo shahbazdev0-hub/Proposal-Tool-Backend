@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { FinanciersService } from './financiers.service';
 import { CreateFinancierDto } from './dto/create-financier.dto';
 import { UpdateFinancierDto } from './dto/update-financier.dto';
@@ -39,6 +39,7 @@ export class FinanciersController {
 
   @Roles(Role.ADMIN)
   @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
   remove(@Param('id') id: string) {
     return this.financiersService.remove(id);
   }
