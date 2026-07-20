@@ -5,6 +5,7 @@ import * as bcrypt from 'bcrypt';
 import { User, UserDocument } from './schemas/user.schema';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UpdateSelfDto } from './dto/update-self.dto';
 
 const SALT_ROUNDS = 10;
 
@@ -95,6 +96,20 @@ export class UsersService {
     if (!user) {
       throw new NotFoundException('User not found');
     }
+    return user;
+  }
+
+  async updateSelf(id: string, dto: UpdateSelfDto): Promise<UserDocument> {
+    const updates: Record<string, unknown> = { ...dto };
+    if (dto.password) {
+      updates.passwordHash = await bcrypt.hash(dto.password, SALT_ROUNDS);
+      delete updates.password;
+    }
+    const user = await this.userModel
+      .findByIdAndUpdate(id, updates, { new: true })
+      .populate(['directRecruiter', 'teamLead', 'regional', 'partner'])
+      .exec();
+    if (!user) throw new NotFoundException('User not found');
     return user;
   }
 
