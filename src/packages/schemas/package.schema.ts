@@ -23,6 +23,9 @@ export type PackageDocument = Package & Document;
 
 @Schema({ timestamps: true })
 export class Package {
+  @Prop({ type: String, trim: true, default: null })
+  productType: string | null;
+
   @Prop({ required: true, enum: WaterType })
   waterType: WaterType;
 

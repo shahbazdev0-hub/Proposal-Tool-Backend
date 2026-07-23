@@ -12,6 +12,10 @@ import { WaterType } from '../../common/enums/water-type.enum';
 import { PackageOverridesDto } from './package-overrides.dto';
 
 export class CreatePackageDto {
+  @IsOptional()
+  @IsString()
+  productType?: string;
+
   @IsEnum(WaterType)
   waterType: WaterType;
 
