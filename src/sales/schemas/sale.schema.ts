@@ -92,6 +92,9 @@ export class Sale {
 
   @Prop({ type: Date, default: null })
   paidDate: Date | null;
+
+  @Prop({ type: String, enum: ['not_installed', 'installed'], default: 'not_installed' })
+  installStatus: 'not_installed' | 'installed';
 }
 
 export const SaleSchema = SchemaFactory.createForClass(Sale);
