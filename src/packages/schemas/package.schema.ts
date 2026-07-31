@@ -1,7 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document } from 'mongoose';
-import { WaterType } from '../../common/enums/water-type.enum';
-
 @Schema({ _id: false })
 export class PackageOverrides {
   @Prop({ required: true, min: 0, default: 0 })
@@ -26,8 +24,8 @@ export class Package {
   @Prop({ type: String, trim: true, default: null })
   productType: string | null;
 
-  @Prop({ required: true, enum: WaterType })
-  waterType: WaterType;
+  @Prop({ required: true, type: String })
+  waterType: string;
 
   @Prop({ required: true, trim: true })
   name: string;

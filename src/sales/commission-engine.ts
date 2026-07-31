@@ -1,5 +1,6 @@
 import { WaterType } from '../common/enums/water-type.enum';
 
+// waterType is a free-form string; only "homewater" triggers the flat model.
 export interface CommissionPackageInput {
   price: number;
   repCommissionFlat: number | null;
@@ -13,7 +14,7 @@ export interface CommissionPackageInput {
 }
 
 export interface CommissionInput {
-  waterType: WaterType;
+  waterType: string;
   package: CommissionPackageInput;
   loanAmount: number;
   dealerFeePercent: number;
