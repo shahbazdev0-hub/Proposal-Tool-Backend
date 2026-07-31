@@ -3,7 +3,6 @@ import {
   IsArray,
   IsDateString,
   IsEmail,
-  IsEnum,
   IsMongoId,
   IsNumber,
   IsOptional,
@@ -11,8 +10,6 @@ import {
   Min,
   ValidateIf,
 } from 'class-validator';
-import { WaterType } from '../../common/enums/water-type.enum';
-
 export class CreateSaleDto {
   @IsString()
   customerName: string;
@@ -41,8 +38,8 @@ export class CreateSaleDto {
   @Min(0)
   loanAmount: number;
 
-  @IsEnum(WaterType)
-  waterType: WaterType;
+  @IsString()
+  waterType: string;
 
   @IsMongoId()
   package: string;
