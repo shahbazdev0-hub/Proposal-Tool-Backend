@@ -45,6 +45,20 @@ export function calculateCommission(input: CommissionInput): CommissionBreakdown
     };
   }
 
+  if (waterType === 'h2pros') {
+    // 10% of loan amount minus $285, plus 20% of adders (upgrades).
+    // Upline overrides and Nick's override follow the Supreme package structure.
+    const salesRep = loanAmount * 0.10 - 285 + addersTotal * 0.20;
+    return {
+      salesRep,
+      directRecruiter: pkg.overrides.directRecruiter,
+      teamLead: pkg.overrides.teamLead,
+      regional: pkg.overrides.regional,
+      partner: pkg.overrides.partner,
+      nickOverride: pkg.nickOverride,
+    };
+  }
+
   // Supreme — dynamic waterfall. A cash sale has dealerFeePercent 0, which
   // collapses this to "amount sold above base package price" automatically.
   const afterDealerFee = loanAmount * (1 - dealerFeePercent / 100);
