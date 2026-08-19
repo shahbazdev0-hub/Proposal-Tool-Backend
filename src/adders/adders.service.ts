@@ -10,11 +10,19 @@ export class AddersService {
   constructor(@InjectModel(Adder.name) private readonly adderModel: Model<AdderDocument>) {}
 
   create(dto: CreateAdderDto): Promise<AdderDocument> {
-    return this.adderModel.create(dto);
+    const { applicablePackageIds, ...rest } = dto;
+    return this.adderModel.create({
+      ...rest,
+      applicablePackages: applicablePackageIds ?? [],
+    });
   }
 
-  findAll(): Promise<AdderDocument[]> {
-    return this.adderModel.find().sort({ name: 1 }).exec();
+  findAll(packageId?: string): Promise<AdderDocument[]> {
+    const filter =
+      packageId
+        ? { $or: [{ applicablePackages: { $size: 0 } }, { applicablePackages: packageId }] }
+        : {};
+    return this.adderModel.find(filter).sort({ name: 1 }).exec();
   }
 
   async findById(id: string): Promise<AdderDocument> {

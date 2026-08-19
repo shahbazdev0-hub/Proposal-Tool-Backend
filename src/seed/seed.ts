@@ -7,6 +7,7 @@ import { UsersService } from '../users/users.service';
 import { Role } from '../common/enums/role.enum';
 import { WaterType } from '../common/enums/water-type.enum';
 import { Package, PackageDocument } from '../packages/schemas/package.schema';
+import { Adder, AdderDocument } from '../adders/schemas/adder.schema';
 
 // Supreme overrides confirmed from the client's spec. Bronze's regular
 // (non-Nick) override split was never given — seeded as 0 until confirmed.
@@ -37,6 +38,15 @@ const SUPREME_PACKAGES = [
   },
 ];
 
+const H2PROS_PACKAGES = [
+  {
+    name: 'Starter Package',
+    price: 2500,
+    overrides: { directRecruiter: 0, teamLead: 0, regional: 0, partner: 0 },
+    nickOverride: 0,
+  },
+];
+
 // Homewater: flat rep commission, override paid to Direct Recruiter only.
 // Nick's "Silver XL"/"Silver" labels are mapped to Base XL/Base L here —
 // that mapping is an assumption, flagged to the user, not yet confirmed.
@@ -56,6 +66,7 @@ async function seed() {
     const configService = app.get(ConfigService);
     const usersService = app.get(UsersService);
     const packageModel = app.get<Model<PackageDocument>>(getModelToken(Package.name));
+    const adderModel = app.get<Model<AdderDocument>>(getModelToken(Adder.name));
 
     const adminEmail = configService.get<string>('seedAdmin.email');
     const adminPassword = configService.get<string>('seedAdmin.password');
@@ -110,6 +121,40 @@ async function seed() {
         nickOverride: pkg.nickOverride,
       });
       console.log(`Seeded Homewater package "${pkg.name}".`);
+    }
+
+    for (const pkg of H2PROS_PACKAGES) {
+      const exists = await packageModel.findOne({ waterType: WaterType.H2PROS, name: pkg.name });
+      if (exists) {
+        console.log(`H2Pros package "${pkg.name}" already exists — skipping.`);
+        continue;
+      }
+      await packageModel.create({
+        waterType: WaterType.H2PROS,
+        name: pkg.name,
+        price: pkg.price,
+        repCommissionFlat: null,
+        overrides: pkg.overrides,
+        nickOverride: pkg.nickOverride,
+      });
+      console.log(`Seeded H2Pros package "${pkg.name}".`);
+    }
+
+    // Default adders
+    const DEFAULT_ADDERS = [
+      { name: 'Reverse Osmosis', price: 400 },
+      { name: 'UV Light', price: 350 },
+      { name: 'Filter Upgrade', price: 250 },
+      { name: 'Softener Upgrade', price: 500 },
+    ];
+    for (const adder of DEFAULT_ADDERS) {
+      const exists = await adderModel.findOne({ name: adder.name });
+      if (exists) {
+        console.log(`Adder "${adder.name}" already exists — skipping.`);
+        continue;
+      }
+      await adderModel.create(adder);
+      console.log(`Seeded adder "${adder.name}".`);
     }
 
     console.log('\nSeed complete. Bronze (Supreme) overrides and the Nick-override Homewater');

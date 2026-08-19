@@ -82,6 +82,15 @@ export class SalesController {
     return this.salesService.markPaid(id, paid);
   }
 
+  @Roles(Role.ADMIN)
+  @Patch(':id/install-status')
+  markInstalled(
+    @Param('id') id: string,
+    @Body('status') status: 'not_installed' | 'installed',
+  ) {
+    return this.salesService.markInstalled(id, status);
+  }
+
   @Post(':id/email')
   async sendEmail(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
     const sale = await this.salesService.findById(id);
@@ -112,6 +121,7 @@ export class SalesController {
       loanOptionLabel: sale.loanOptionLabel,
       loanAmount: sale.loanAmount,
       salesRepName: salesRep?.name ?? '—',
+      commissionAmount: sale.commissions?.salesRep ?? 0,
       commissionsPaid: sale.commissionsPaid,
     });
 

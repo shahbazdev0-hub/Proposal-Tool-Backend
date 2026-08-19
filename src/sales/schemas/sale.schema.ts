@@ -1,7 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
-import { WaterType } from '../../common/enums/water-type.enum';
-
 @Schema({ _id: false })
 export class CommissionBreakdown {
   @Prop({ required: true })
@@ -55,8 +53,8 @@ export class Sale {
   @Prop({ required: true, min: 0 })
   loanAmount: number;
 
-  @Prop({ required: true, enum: WaterType })
-  waterType: WaterType;
+  @Prop({ required: true, type: String })
+  waterType: string;
 
   @Prop({ type: Types.ObjectId, ref: 'Package', required: true })
   package: Types.ObjectId;
@@ -92,6 +90,9 @@ export class Sale {
 
   @Prop({ type: Date, default: null })
   paidDate: Date | null;
+
+  @Prop({ type: String, enum: ['not_installed', 'installed'], default: 'not_installed' })
+  installStatus: 'not_installed' | 'installed';
 }
 
 export const SaleSchema = SchemaFactory.createForClass(Sale);

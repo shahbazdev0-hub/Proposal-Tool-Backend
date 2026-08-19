@@ -232,6 +232,14 @@ export class SalesService {
     if (!result) throw new NotFoundException('Sale not found');
   }
 
+  async markInstalled(id: string, status: 'not_installed' | 'installed'): Promise<SaleDocument> {
+    const sale = await this.saleModel
+      .findByIdAndUpdate(id, { installStatus: status }, { new: true })
+      .exec();
+    if (!sale) throw new NotFoundException('Sale not found');
+    return sale;
+  }
+
   async markPaid(id: string, paid: boolean): Promise<SaleDocument> {
     const sale = await this.saleModel
       .findByIdAndUpdate(id, { commissionsPaid: paid, paidDate: paid ? new Date() : null }, { new: true })

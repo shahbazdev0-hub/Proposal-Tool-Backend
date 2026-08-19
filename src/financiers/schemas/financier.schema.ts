@@ -10,6 +10,21 @@ export class LoanOption {
 
   @Prop({ required: true, min: 0, max: 100 })
   dealerFeePercent: number;
+
+  /** Loan term in months (e.g. 120 = 10 years). Optional — informational. */
+  @Prop({ type: Number, default: null })
+  loanTerm: number | null;
+
+  /** Annual Percentage Rate (e.g. 9.99). Optional — informational. */
+  @Prop({ type: Number, default: null })
+  interestRate: number | null;
+
+  /** Monthly payment per $1,000 financed (e.g. 10.46). Used to compute monthly payment. */
+  @Prop({ type: Number, default: null })
+  paymentFactor: number | null;
+
+  @Prop({ default: true })
+  isActive: boolean;
 }
 
 export const LoanOptionSchema = SchemaFactory.createForClass(LoanOption);

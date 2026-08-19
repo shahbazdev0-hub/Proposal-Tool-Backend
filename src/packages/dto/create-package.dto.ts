@@ -1,6 +1,5 @@
 import { Type } from 'class-transformer';
 import {
-  IsEnum,
   IsNumber,
   IsOptional,
   IsString,
@@ -16,8 +15,8 @@ export class CreatePackageDto {
   @IsString()
   productType?: string;
 
-  @IsEnum(WaterType)
-  waterType: WaterType;
+  @IsString()
+  waterType: string;
 
   @IsString()
   name: string;
@@ -40,4 +39,13 @@ export class CreatePackageDto {
   @IsNumber()
   @Min(0)
   nickOverride?: number;
+
+  @IsOptional()
+  @IsString({ each: true })
+  inclusions?: string[];
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  maxMargin?: number;
 }

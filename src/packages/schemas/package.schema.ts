@@ -1,7 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document } from 'mongoose';
-import { WaterType } from '../../common/enums/water-type.enum';
-
 @Schema({ _id: false })
 export class PackageOverrides {
   @Prop({ required: true, min: 0, default: 0 })
@@ -26,8 +24,8 @@ export class Package {
   @Prop({ type: String, trim: true, default: null })
   productType: string | null;
 
-  @Prop({ required: true, enum: WaterType })
-  waterType: WaterType;
+  @Prop({ required: true, type: String })
+  waterType: string;
 
   @Prop({ required: true, trim: true })
   name: string;
@@ -49,6 +47,14 @@ export class Package {
   // Hidden override visible to Admin only — never exposed to non-admin roles.
   @Prop({ required: true, min: 0, default: 0 })
   nickOverride: number;
+
+  /** Bullet-point inclusions shown on the customer proposal PDF. */
+  @Prop({ type: [String], default: [] })
+  inclusions: string[];
+
+  /** Maximum sales margin (dollars) a rep can add. 0 = no margin allowed. */
+  @Prop({ type: Number, default: 0, min: 0 })
+  maxMargin: number;
 
   @Prop({ default: true })
   isActive: boolean;

@@ -45,7 +45,14 @@ export class FinanciersService {
 
   async addLoanOption(id: string, dto: LoanOptionDto): Promise<FinancierDocument> {
     const financier = await this.findById(id);
-    financier.loanOptions.push(dto);
+    financier.loanOptions.push({
+      label: dto.label,
+      dealerFeePercent: dto.dealerFeePercent,
+      loanTerm: dto.loanTerm ?? null,
+      interestRate: dto.interestRate ?? null,
+      paymentFactor: dto.paymentFactor ?? null,
+      isActive: dto.isActive ?? true,
+    });
     return financier.save();
   }
 
@@ -61,6 +68,10 @@ export class FinanciersService {
     }
     loanOption.label = dto.label;
     loanOption.dealerFeePercent = dto.dealerFeePercent;
+    loanOption.loanTerm = dto.loanTerm ?? null;
+    loanOption.interestRate = dto.interestRate ?? null;
+    loanOption.paymentFactor = dto.paymentFactor ?? null;
+    loanOption.isActive = dto.isActive ?? loanOption.isActive;
     return financier.save();
   }
 

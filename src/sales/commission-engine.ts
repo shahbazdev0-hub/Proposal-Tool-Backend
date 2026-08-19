@@ -1,5 +1,6 @@
 import { WaterType } from '../common/enums/water-type.enum';
 
+// waterType is a free-form string; only "homewater" triggers the flat model.
 export interface CommissionPackageInput {
   price: number;
   repCommissionFlat: number | null;
@@ -13,7 +14,7 @@ export interface CommissionPackageInput {
 }
 
 export interface CommissionInput {
-  waterType: WaterType;
+  waterType: string;
   package: CommissionPackageInput;
   loanAmount: number;
   dealerFeePercent: number;
@@ -40,6 +41,20 @@ export function calculateCommission(input: CommissionInput): CommissionBreakdown
       teamLead: 0,
       regional: 0,
       partner: 0,
+      nickOverride: pkg.nickOverride,
+    };
+  }
+
+  if (waterType === 'h2pros') {
+    // 10% of loan amount minus $285, plus 20% of adders (upgrades).
+    // Upline overrides and Nick's override follow the Supreme package structure.
+    const salesRep = loanAmount * 0.10 - 285 + addersTotal * 0.20;
+    return {
+      salesRep,
+      directRecruiter: pkg.overrides.directRecruiter,
+      teamLead: pkg.overrides.teamLead,
+      regional: pkg.overrides.regional,
+      partner: pkg.overrides.partner,
       nickOverride: pkg.nickOverride,
     };
   }
