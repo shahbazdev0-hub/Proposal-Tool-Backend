@@ -39,4 +39,13 @@ export class CreatePackageDto {
   @IsNumber()
   @Min(0)
   nickOverride?: number;
+
+  @IsOptional()
+  @IsString({ each: true })
+  inclusions?: string[];
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  maxMargin?: number;
 }

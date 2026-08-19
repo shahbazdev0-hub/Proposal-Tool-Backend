@@ -1,4 +1,4 @@
-import { IsNumber, IsString, Min } from 'class-validator';
+import { IsArray, IsMongoId, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 
 export class CreateAdderDto {
   @IsString()
@@ -7,4 +7,9 @@ export class CreateAdderDto {
   @IsNumber()
   @Min(0)
   price: number;
+
+  @IsOptional()
+  @IsArray()
+  @IsMongoId({ each: true })
+  applicablePackageIds?: string[];
 }

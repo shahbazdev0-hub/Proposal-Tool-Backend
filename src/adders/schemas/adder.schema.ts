@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
+import { Document, Types } from 'mongoose';
 
 export type AdderDocument = Adder & Document;
 
@@ -13,6 +13,10 @@ export class Adder {
 
   @Prop({ default: true })
   isActive: boolean;
+
+  /** Empty = applies to all packages. Non-empty = only shown for listed packages. */
+  @Prop({ type: [{ type: Types.ObjectId, ref: 'Package' }], default: [] })
+  applicablePackages: Types.ObjectId[];
 }
 
 export const AdderSchema = SchemaFactory.createForClass(Adder);

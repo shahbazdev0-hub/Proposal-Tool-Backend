@@ -12,6 +12,9 @@ import { SalesModule } from './sales/sales.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { PayrollModule } from './payroll/payroll.module';
 import { ControlPanelModule } from './control-panel/control-panel.module';
+import { CustomersModule } from './customers/customers.module';
+import { ProposalsModule } from './proposals/proposals.module';
+import { SettingsModule } from './settings/settings.module';
 
 @Module({
   imports: [
@@ -36,6 +39,9 @@ import { ControlPanelModule } from './control-panel/control-panel.module';
     DashboardModule,
     PayrollModule,
     ControlPanelModule,
+    CustomersModule,
+    ProposalsModule,
+    SettingsModule,
   ],
 })
 export class AppModule {}

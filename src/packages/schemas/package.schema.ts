@@ -48,6 +48,14 @@ export class Package {
   @Prop({ required: true, min: 0, default: 0 })
   nickOverride: number;
 
+  /** Bullet-point inclusions shown on the customer proposal PDF. */
+  @Prop({ type: [String], default: [] })
+  inclusions: string[];
+
+  /** Maximum sales margin (dollars) a rep can add. 0 = no margin allowed. */
+  @Prop({ type: Number, default: 0, min: 0 })
+  maxMargin: number;
+
   @Prop({ default: true })
   isActive: boolean;
 }

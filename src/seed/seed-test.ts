@@ -16,9 +16,13 @@ import { UsersService } from '../users/users.service';
 import { SalesService } from '../sales/sales.service';
 import { PackagesService } from '../packages/packages.service';
 import { FinanciersService } from '../financiers/financiers.service';
+import { CustomersService } from '../customers/customers.service';
+import { ProposalsService } from '../proposals/proposals.service';
 import { Role } from '../common/enums/role.enum';
 import { WaterType } from '../common/enums/water-type.enum';
 import { Sale, SaleDocument } from '../sales/schemas/sale.schema';
+import { Customer, CustomerDocument } from '../customers/schemas/customer.schema';
+import { Proposal, ProposalDocument } from '../proposals/schemas/proposal.schema';
 import { CreateSaleDto } from '../sales/dto/create-sale.dto';
 
 const PASSWORD = 'Password123!';
@@ -31,7 +35,11 @@ async function seedTest() {
     const salesService = app.get(SalesService);
     const packagesService = app.get(PackagesService);
     const financiersService = app.get(FinanciersService);
+    const customersService = app.get(CustomersService);
+    const proposalsService = app.get(ProposalsService);
     const saleModel = app.get<Model<SaleDocument>>(getModelToken(Sale.name));
+    const customerModel = app.get<Model<CustomerDocument>>(getModelToken(Customer.name));
+    const proposalModel = app.get<Model<ProposalDocument>>(getModelToken(Proposal.name));
 
     async function getOrCreate(email: string, createData: Parameters<typeof usersService.create>[0]) {
       const existing = await usersService.findByEmailWithPassword(email);
@@ -185,12 +193,128 @@ async function seedTest() {
     console.log('  regional:       ', sale1.regional?.toString());
     console.log('  partner:        ', sale1.partner?.toString());
 
+    // ── Customers ────────────────────────────────────────────────────────────
+    console.log('\n=== Customers ===');
+
+    const CUSTOMERS = [
+      { name: 'Michael Johnson', address: '142 Maple Street, Phoenix, AZ 85001', phone: '(602) 555-0101', email: 'michael.johnson@email.com', notes: 'Interested in whole-home filtration. Has well water.' },
+      { name: 'Sarah Williams', address: '87 Oak Avenue, Scottsdale, AZ 85251', phone: '(480) 555-0178', email: 'sarah.w@gmail.com', notes: undefined },
+      { name: 'David Martinez', address: '310 Desert Rose Blvd, Tempe, AZ 85281', phone: '(480) 555-0234', email: 'david.martinez@hotmail.com', notes: 'City water. Concerned about chlorine taste.' },
+      { name: 'Emily Thompson', address: '55 Saguaro Lane, Mesa, AZ 85201', phone: '(480) 555-0310', email: 'emily.t@yahoo.com', notes: undefined },
+      { name: 'Robert Garcia', address: '720 Pinnacle Peak Rd, Glendale, AZ 85301', phone: '(623) 555-0445', email: 'rgarcia@outlook.com', notes: 'Family of 5. Hard water issues reported.' },
+    ];
+
+    const seededCustomers: CustomerDocument[] = [];
+    for (const c of CUSTOMERS) {
+      const existing = await customerModel.findOne({ email: c.email });
+      if (existing) {
+        console.log(`  exists   ${c.name}`);
+        seededCustomers.push(existing);
+      } else {
+        const created = await customersService.create(c, rep1Id);
+        console.log(`  created  ${c.name}`);
+        seededCustomers.push(created);
+      }
+    }
+
+    // ── Proposals ────────────────────────────────────────────────────────────
+    console.log('\n=== Proposals ===');
+
+    // Delete all existing proposals for rep1 and recreate (same as sales approach)
+    const oldProposalCount = await proposalModel.countDocuments({ salesRep: rep1._id });
+    if (oldProposalCount > 0) {
+      await proposalModel.deleteMany({ salesRep: rep1._id });
+      console.log(`  deleted ${oldProposalCount} old proposal(s) for rep1`);
+    }
+
+    const [cust1, cust2, cust3, cust4, cust5] = seededCustomers;
+
+    // Grab adders if any exist
+    const allAdders = await app.get(require('../adders/adders.service').AddersService).findAll();
+    const adderIds = allAdders.slice(0, 2).map((a: any) => (a._id as Types.ObjectId).toString());
+
+    // Proposal 1 — Supreme Diamond, financed, status: sent
+    const p1 = await proposalsService.create(
+      {
+        customerId: (cust1._id as Types.ObjectId).toString(),
+        waterType: WaterType.SUPREME,
+        packageId: goldId,
+        adderIds,
+        salesMargin: 500,
+        financierId: fWithLoan ? (fWithLoan._id as Types.ObjectId).toString() : undefined,
+        loanOptionId: fWithLoan ? (fWithLoan.loanOptions[0]._id as Types.ObjectId).toString() : undefined,
+      },
+      rep1Id,
+    );
+    await proposalModel.findByIdAndUpdate(p1._id, { status: 'sent' });
+    console.log(`  created  Proposal for ${cust1.name} — Supreme Gold — $${p1.cashPrice} cash — status: sent`);
+
+    // Proposal 2 — Supreme Silver, cash, status: accepted
+    const p2 = await proposalsService.create(
+      {
+        customerId: (cust2._id as Types.ObjectId).toString(),
+        waterType: WaterType.SUPREME,
+        packageId: silverId,
+        adderIds: [],
+        salesMargin: 0,
+      },
+      rep1Id,
+    );
+    await proposalModel.findByIdAndUpdate(p2._id, { status: 'accepted' });
+    console.log(`  created  Proposal for ${cust2.name} — Supreme Silver — $${p2.cashPrice} cash — status: accepted`);
+
+    // Proposal 3 — Homewater Platinum XL, cash, status: draft
+    const p3 = await proposalsService.create(
+      {
+        customerId: (cust3._id as Types.ObjectId).toString(),
+        waterType: WaterType.HOMEWATER,
+        packageId: hwPlatXLId,
+        adderIds: [],
+        salesMargin: 0,
+      },
+      rep1Id,
+    );
+    console.log(`  created  Proposal for ${cust3.name} — Homewater Platinum XL — $${p3.cashPrice} cash — status: draft`);
+
+    // Proposal 4 — Supreme Gold, financed, status: declined
+    const p4 = await proposalsService.create(
+      {
+        customerId: (cust4._id as Types.ObjectId).toString(),
+        waterType: WaterType.SUPREME,
+        packageId: goldId,
+        adderIds: [],
+        salesMargin: 200,
+        financierId: fWithLoan ? (fWithLoan._id as Types.ObjectId).toString() : undefined,
+        loanOptionId: fWithLoan ? (fWithLoan.loanOptions[0]._id as Types.ObjectId).toString() : undefined,
+      },
+      rep1Id,
+    );
+    await proposalModel.findByIdAndUpdate(p4._id, { status: 'declined' });
+    console.log(`  created  Proposal for ${cust4.name} — Supreme Gold — $${p4.cashPrice} cash — status: declined`);
+
+    // Proposal 5 — Supreme Silver, financed, status: converted
+    const p5 = await proposalsService.create(
+      {
+        customerId: (cust5._id as Types.ObjectId).toString(),
+        waterType: WaterType.SUPREME,
+        packageId: silverId,
+        adderIds,
+        salesMargin: 300,
+        financierId: fWithLoan ? (fWithLoan._id as Types.ObjectId).toString() : undefined,
+        loanOptionId: fWithLoan ? (fWithLoan.loanOptions[0]._id as Types.ObjectId).toString() : undefined,
+      },
+      rep1Id,
+    );
+    await proposalModel.findByIdAndUpdate(p5._id, { status: 'converted' });
+    console.log(`  created  Proposal for ${cust5.name} — Supreme Silver — $${p5.cashPrice} cash — status: converted`);
+
     console.log('\n=== Done — log in to verify dashboard numbers ===');
     console.log('  rep1@example.com         → sees 3 sales + own commissions');
     console.log('  recruiter@example.com    → sees 3 sales (override on all 3)');
     console.log('  teamlead@example.com     → sees 2 Supreme sales (override)');
     console.log('  regional@example.com     → sees 2 Supreme sales (override)');
     console.log('  partner@example.com      → sees 2 Supreme sales (override)');
+    console.log('  All roles               → 5 customers + 5 proposals visible to admin');
 
   } finally {
     await app.close();
