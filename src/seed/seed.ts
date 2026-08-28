@@ -11,27 +11,35 @@ import { Adder, AdderDocument } from '../adders/schemas/adder.schema';
 
 // Supreme overrides confirmed from the client's spec. Bronze's regular
 // (non-Nick) override split was never given — seeded as 0 until confirmed.
+//
+// maxMargin is the ceiling a rep may add on top of the base price (scope §8).
+// These are PLACEHOLDER values so the seeded catalog is usable out of the box —
+// an admin must confirm the real caps per package in the control panel.
 const SUPREME_PACKAGES = [
   {
     name: 'Diamond',
+    maxMargin: 1500,
     price: 5200,
     overrides: { directRecruiter: 200, teamLead: 300, regional: 350, partner: 150 },
     nickOverride: 300,
   },
   {
     name: 'Gold',
+    maxMargin: 1200,
     price: 4200,
     overrides: { directRecruiter: 150, teamLead: 200, regional: 250, partner: 100 },
     nickOverride: 200,
   },
   {
     name: 'Silver',
+    maxMargin: 1000,
     price: 4000,
     overrides: { directRecruiter: 150, teamLead: 200, regional: 250, partner: 100 },
     nickOverride: 200,
   },
   {
     name: 'Bronze',
+    maxMargin: 750,
     price: 3300,
     overrides: { directRecruiter: 0, teamLead: 0, regional: 0, partner: 0 },
     nickOverride: 100,
@@ -41,6 +49,7 @@ const SUPREME_PACKAGES = [
 const H2PROS_PACKAGES = [
   {
     name: 'Starter Package',
+    maxMargin: 750,
     price: 2500,
     overrides: { directRecruiter: 0, teamLead: 0, regional: 0, partner: 0 },
     nickOverride: 0,
@@ -51,12 +60,12 @@ const H2PROS_PACKAGES = [
 // Nick's "Silver XL"/"Silver" labels are mapped to Base XL/Base L here —
 // that mapping is an assumption, flagged to the user, not yet confirmed.
 const HOMEWATER_PACKAGES = [
-  { name: 'Platinum XL', price: 500, repCommissionFlat: 500, directRecruiterOverride: 100, nickOverride: 50 },
-  { name: 'Platinum L', price: 450, repCommissionFlat: 450, directRecruiterOverride: 90, nickOverride: 45 },
-  { name: 'Gold XL', price: 425, repCommissionFlat: 425, directRecruiterOverride: 85, nickOverride: 43 },
-  { name: 'Gold L', price: 375, repCommissionFlat: 375, directRecruiterOverride: 75, nickOverride: 38 },
-  { name: 'Base XL', price: 275, repCommissionFlat: 275, directRecruiterOverride: 55, nickOverride: 28 },
-  { name: 'Base L', price: 250, repCommissionFlat: 250, directRecruiterOverride: 50, nickOverride: 25 },
+  { name: 'Platinum XL', price: 500, maxMargin: 500, repCommissionFlat: 500, directRecruiterOverride: 100, nickOverride: 50 },
+  { name: 'Platinum L', price: 450, maxMargin: 500, repCommissionFlat: 450, directRecruiterOverride: 90, nickOverride: 45 },
+  { name: 'Gold XL', price: 425, maxMargin: 500, repCommissionFlat: 425, directRecruiterOverride: 85, nickOverride: 43 },
+  { name: 'Gold L', price: 375, maxMargin: 500, repCommissionFlat: 375, directRecruiterOverride: 75, nickOverride: 38 },
+  { name: 'Base XL', price: 275, maxMargin: 500, repCommissionFlat: 275, directRecruiterOverride: 55, nickOverride: 28 },
+  { name: 'Base L', price: 250, maxMargin: 500, repCommissionFlat: 250, directRecruiterOverride: 50, nickOverride: 25 },
 ];
 
 async function seed() {
@@ -99,6 +108,7 @@ async function seed() {
         waterType: WaterType.SUPREME,
         name: pkg.name,
         price: pkg.price,
+        maxMargin: pkg.maxMargin,
         repCommissionFlat: null,
         overrides: pkg.overrides,
         nickOverride: pkg.nickOverride,
@@ -116,6 +126,7 @@ async function seed() {
         waterType: WaterType.HOMEWATER,
         name: pkg.name,
         price: pkg.price,
+        maxMargin: pkg.maxMargin,
         repCommissionFlat: pkg.repCommissionFlat,
         overrides: { directRecruiter: pkg.directRecruiterOverride, teamLead: 0, regional: 0, partner: 0 },
         nickOverride: pkg.nickOverride,
@@ -133,6 +144,7 @@ async function seed() {
         waterType: WaterType.H2PROS,
         name: pkg.name,
         price: pkg.price,
+        maxMargin: pkg.maxMargin,
         repCommissionFlat: null,
         overrides: pkg.overrides,
         nickOverride: pkg.nickOverride,
