@@ -124,6 +124,91 @@ export class EmailService {
       );
     }
   }
+
+  /**
+   * Sends the customer-facing proposal with the generated PDF attached.
+   * Deliberately separate from sendSaleReceipt: different audience (the
+   * customer, not internal payroll) and branding comes from company Settings
+   * rather than the hard-coded internal template.
+   */
+  async sendProposal(
+    to: string,
+    payload: {
+      customerName: string;
+      companyName: string;
+      primaryColor: string;
+      packageName: string;
+      cashPrice: number;
+      monthlyPayment: number | null;
+      pdf: Buffer;
+    },
+  ): Promise<void> {
+    const fmt = (n: number) =>
+      new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
+
+    const accent = payload.primaryColor || '#1e293b';
+
+    const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width,initial-scale=1" /></head>
+<body style="margin:0;padding:24px;background:#f8fafc;font-family:Arial,Helvetica,sans-serif">
+  <div style="max-width:520px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:6px;overflow:hidden">
+    <div style="padding:20px 32px;background:${accent}">
+      <span style="font-size:18px;font-weight:700;color:#fff">${payload.companyName}</span>
+    </div>
+    <div style="padding:28px 32px">
+      <p style="margin:0 0 16px;font-size:15px;color:#0f172a">Hi ${payload.customerName},</p>
+      <p style="margin:0 0 20px;font-size:14px;color:#475569;line-height:1.6">
+        Thank you for your time. Your personalised proposal for the
+        <strong>${payload.packageName}</strong> is attached as a PDF.
+      </p>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:20px">
+        <tbody>
+          <tr>
+            <td style="padding:12px 0;border-bottom:1px solid #e2e8f0;font-size:13px;color:#64748b">Total Cash Price</td>
+            <td style="padding:12px 0;border-bottom:1px solid #e2e8f0;font-size:13px;color:#0f172a;text-align:right;font-weight:700">${fmt(payload.cashPrice)}</td>
+          </tr>
+          ${
+            payload.monthlyPayment != null
+              ? `<tr>
+            <td style="padding:12px 0;border-bottom:1px solid #e2e8f0;font-size:13px;color:#64748b">Estimated Monthly Payment</td>
+            <td style="padding:12px 0;border-bottom:1px solid #e2e8f0;font-size:13px;color:#0f172a;text-align:right;font-weight:700">${fmt(payload.monthlyPayment)}</td>
+          </tr>`
+              : ''
+          }
+        </tbody>
+      </table>
+      <p style="margin:0;font-size:13px;color:#64748b;line-height:1.6">
+        Please review the attached proposal and reach out with any questions.
+      </p>
+    </div>
+    <div style="padding:16px 32px;border-top:1px solid #e2e8f0;text-align:center">
+      <p style="margin:0;font-size:11px;color:#94a3b8">
+        This proposal is an estimate. Financing terms are subject to lender approval.
+      </p>
+    </div>
+  </div>
+</body>
+</html>
+    `;
+
+    try {
+      await this.transporter.sendMail({
+        from: `"${payload.companyName}" <${this.configService.get<string>('email.user')}>`,
+        to,
+        subject: `Your proposal from ${payload.companyName}`,
+        html,
+        attachments: [
+          { filename: 'proposal.pdf', content: payload.pdf, contentType: 'application/pdf' },
+        ],
+      });
+    } catch (err) {
+      throw new InternalServerErrorException(
+        `Failed to send proposal email: ${(err as Error).message}`,
+      );
+    }
+  }
 }
 
 // ── Helper: table row ─────────────────────────────────────────────────────────

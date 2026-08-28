@@ -24,6 +24,17 @@ function castUplineIds(obj: Record<string, unknown>): void {
   }
 }
 
+// allowedPackages arrives from JSON as string[]; cast so the ObjectId $in
+// filter in PackagesService matches. Same reasoning as castUplineIds above.
+function castAllowedPackages(obj: Record<string, unknown>): void {
+  const raw = obj['allowedPackages'];
+  if (Array.isArray(raw)) {
+    obj['allowedPackages'] = raw
+      .filter((v): v is string => typeof v === 'string' && v.length > 0)
+      .map((v) => new Types.ObjectId(v));
+  }
+}
+
 @Injectable()
 export class UsersService {
   constructor(@InjectModel(User.name) private readonly userModel: Model<UserDocument>) {}
@@ -38,6 +49,7 @@ export class UsersService {
     const { password, ...rest } = dto;
     const payload = { ...rest, passwordHash };
     castUplineIds(payload);
+    castAllowedPackages(payload);
 
     const created = await this.userModel.create(payload);
     // create()'s return value ignores the schema's `select: false` on
@@ -88,6 +100,7 @@ export class UsersService {
     }
 
     castUplineIds(updates);
+    castAllowedPackages(updates);
 
     const user = await this.userModel
       .findByIdAndUpdate(id, updates, { new: true })
