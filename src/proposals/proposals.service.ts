@@ -9,6 +9,34 @@ import { AddersService } from '../adders/adders.service';
 import { FinanciersService } from '../financiers/financiers.service';
 import { Role } from '../common/enums/role.enum';
 
+// Every read of a proposal hydrates the same references — keep the list in one
+// place so a field added here can't be missed by one of the call sites.
+const POPULATE = [
+  { path: 'customer', select: 'name email phone address' },
+  { path: 'salesRep', select: 'name email' },
+  { path: 'package', select: 'name price waterType inclusions maxMargin imageUrl' },
+  { path: 'adders', select: 'name price' },
+  { path: 'financier', select: 'name' },
+];
+
+/** Everything priced from a proposal's inputs. */
+interface PricedProposal {
+  waterType: string;
+  package: string;
+  adders: string[];
+  addersTotal: number;
+  salesMargin: number;
+  cashPrice: number;
+  financier: string | null;
+  loanOptionLabel: string | null;
+  dealerFeePercent: number;
+  dealerFee: number;
+  financedAmount: number;
+  monthlyPayment: number | null;
+  loanTerm: number | null;
+  interestRate: number | null;
+}
+
 @Injectable()
 export class ProposalsService {
   constructor(
@@ -18,32 +46,61 @@ export class ProposalsService {
     private readonly financiersService: FinanciersService,
   ) {}
 
-  async create(dto: CreateProposalDto, salesRepId: string): Promise<ProposalDocument> {
-    // Resolve package
+  /**
+   * Single source of truth for proposal pricing. Both create and update run
+   * through here so an edited proposal is validated and priced exactly like a
+   * new one — client-supplied totals are never trusted.
+   */
+  private async price(
+    dto: CreateProposalDto,
+    salesRepId: string,
+    role: Role,
+  ): Promise<PricedProposal> {
+    // Catalog access is enforced on the write path too — a rep must not be able
+    // to quote a package they were never granted by POSTing its id directly.
+    await this.packagesService.assertUserMayUse(salesRepId, role, dto.packageId);
     const pkg = await this.packagesService.findById(dto.packageId);
 
-    // Resolve adders and sum total
-    const adderIds = dto.adderIds ?? [];
-    let addersTotal = 0;
-    if (adderIds.length > 0) {
-      const allAdders = await this.addersService.findAll();
-      const selectedAdders = allAdders.filter((a) => adderIds.includes(a._id.toString()));
-      addersTotal = selectedAdders.reduce((sum, a) => sum + a.price, 0);
-    }
-
-    // Validate margin
-    const maxMargin = pkg.maxMargin ?? 0;
-    if (dto.salesMargin > maxMargin && maxMargin > 0) {
+    // waterType is denormalised onto the proposal for reporting; if it
+    // disagreed with the package the two would drift apart silently.
+    if (dto.waterType !== pkg.waterType) {
       throw new BadRequestException(
-        `Sales margin cannot exceed $${maxMargin} for this package.`,
+        `Water type "${dto.waterType}" does not match the selected package.`,
       );
     }
 
-    // Cash price = package price + adders + margin
+    // Only adders actually applicable to this package may be attached, and
+    // inactive ones are rejected rather than silently priced at zero.
+    const adderIds = dto.adderIds ?? [];
+    let addersTotal = 0;
+    if (adderIds.length > 0) {
+      const applicable = await this.addersService.findAll(dto.packageId);
+      const selected = applicable.filter(
+        (a) => adderIds.includes(a._id.toString()) && a.isActive,
+      );
+      if (selected.length !== adderIds.length) {
+        throw new BadRequestException(
+          'One or more selected adders are inactive or not available for this package.',
+        );
+      }
+      addersTotal = selected.reduce((sum, a) => sum + a.price, 0);
+    }
+
+    // Margin cap. maxMargin of 0 means "no margin allowed" (see Package schema),
+    // so the ceiling is enforced unconditionally — including at zero.
+    const maxMargin = pkg.maxMargin ?? 0;
+    if (dto.salesMargin > maxMargin) {
+      throw new BadRequestException(
+        maxMargin === 0
+          ? 'This package does not allow a sales margin.'
+          : `Sales margin cannot exceed $${maxMargin} for this package.`,
+      );
+    }
+
     const cashPrice = pkg.price + addersTotal + dto.salesMargin;
 
-    // Financing
-    let financierId: string | null = dto.financierId ?? null;
+    // ── Financing (absent = cash sale) ────────────────────────────────────────
+    let financier: string | null = null;
     let loanOptionLabel: string | null = null;
     let dealerFeePercent = 0;
     let dealerFee = 0;
@@ -53,12 +110,14 @@ export class ProposalsService {
     let interestRate: number | null = null;
 
     if (dto.financierId && dto.loanOptionId) {
-      const financier = await this.financiersService.findById(dto.financierId);
-      const loanOption = financier.loanOptions.find(
-        (lo) => lo._id?.toString() === dto.loanOptionId,
-      );
+      const f = await this.financiersService.findById(dto.financierId);
+      const loanOption = f.loanOptions.find((lo) => lo._id?.toString() === dto.loanOptionId);
       if (!loanOption) throw new NotFoundException('Loan option not found');
+      if (!loanOption.isActive) {
+        throw new BadRequestException('That financing program is no longer active.');
+      }
 
+      financier = dto.financierId;
       loanOptionLabel = loanOption.label;
       dealerFeePercent = loanOption.dealerFeePercent;
       dealerFee = cashPrice * (dealerFeePercent / 100);
@@ -69,20 +128,16 @@ export class ProposalsService {
       if (loanOption.paymentFactor != null && loanOption.paymentFactor > 0) {
         monthlyPayment = (financedAmount / 1000) * loanOption.paymentFactor;
       }
-    } else {
-      financierId = null;
     }
 
-    return this.proposalModel.create({
-      customer: dto.customerId,
-      salesRep: salesRepId,
+    return {
       waterType: dto.waterType,
       package: dto.packageId,
       adders: adderIds,
       addersTotal,
       salesMargin: dto.salesMargin,
       cashPrice,
-      financier: financierId,
+      financier,
       loanOptionLabel,
       dealerFeePercent,
       dealerFee,
@@ -90,86 +145,81 @@ export class ProposalsService {
       monthlyPayment,
       loanTerm,
       interestRate,
+    };
+  }
+
+  async create(
+    dto: CreateProposalDto,
+    salesRepId: string,
+    role: Role,
+  ): Promise<ProposalDocument> {
+    const priced = await this.price(dto, salesRepId, role);
+    const created = await this.proposalModel.create({
+      customer: dto.customerId,
+      salesRep: salesRepId,
+      ...priced,
     });
+    return this.findById(String(created._id));
   }
 
   findAll(requestingUserId: string, role: Role): Promise<ProposalDocument[]> {
     const filter =
       role === Role.ADMIN || role === Role.OPS ? {} : { salesRep: requestingUserId };
-    return this.proposalModel
-      .find(filter)
-      .sort({ createdAt: -1 })
-      .populate('customer', 'name email phone address')
-      .populate('salesRep', 'name email')
-      .populate('package', 'name price waterType inclusions')
-      .populate('adders', 'name price')
-      .populate('financier', 'name')
-      .exec();
+    return this.proposalModel.find(filter).sort({ createdAt: -1 }).populate(POPULATE).exec();
   }
 
   async findById(id: string): Promise<ProposalDocument> {
-    const proposal = await this.proposalModel
-      .findById(id)
-      .populate('customer', 'name email phone address')
-      .populate('salesRep', 'name email')
-      .populate('package', 'name price waterType inclusions maxMargin')
-      .populate('adders', 'name price')
-      .populate('financier', 'name')
-      .exec();
+    const proposal = await this.proposalModel.findById(id).populate(POPULATE).exec();
     if (!proposal) throw new NotFoundException('Proposal not found');
     return proposal;
   }
 
-  async update(id: string, dto: UpdateProposalDto): Promise<ProposalDocument> {
-    // If only status/convertedSaleId is being updated, apply directly.
-    const directFields: Record<string, unknown> = {};
-    if (dto.status !== undefined) directFields['status'] = dto.status;
-    if (dto.convertedSaleId !== undefined) directFields['convertedSaleId'] = dto.convertedSaleId;
+  async update(id: string, dto: UpdateProposalDto, role: Role): Promise<ProposalDocument> {
+    const existing = await this.findById(id);
 
-    if (Object.keys(directFields).length > 0 && !dto.packageId) {
-      const updated = await this.proposalModel
-        .findByIdAndUpdate(id, directFields, { new: true })
-        .populate('customer', 'name email phone address')
-        .populate('salesRep', 'name email')
-        .populate('package', 'name price waterType inclusions maxMargin')
-        .populate('adders', 'name price')
-        .populate('financier', 'name')
-        .exec();
-      if (!updated) throw new NotFoundException('Proposal not found');
-      return updated;
+    const idOf = (v: unknown): string =>
+      (v as { _id?: { toString(): string } })?._id?.toString() ?? String(v);
+
+    const updates: Record<string, unknown> = {};
+    if (dto.status !== undefined) updates.status = dto.status;
+    if (dto.convertedSaleId !== undefined) updates.convertedSaleId = dto.convertedSaleId;
+
+    // Any change to a priced input re-runs the whole calculation, so an edited
+    // proposal can never carry stale totals or slip past the margin cap. This
+    // replaces the old create-then-delete round trip, which also clobbered
+    // createdAt.
+    const touchesPricing = [
+      dto.customerId,
+      dto.waterType,
+      dto.packageId,
+      dto.adderIds,
+      dto.salesMargin,
+      dto.financierId,
+      dto.loanOptionId,
+    ].some((f) => f !== undefined);
+
+    if (touchesPricing) {
+      const priced = await this.price(
+        {
+          customerId: dto.customerId ?? idOf(existing.customer),
+          waterType: dto.waterType ?? existing.waterType,
+          packageId: dto.packageId ?? idOf(existing.package),
+          adderIds: dto.adderIds ?? existing.adders.map(idOf),
+          salesMargin: dto.salesMargin ?? existing.salesMargin,
+          financierId:
+            dto.financierId ?? (existing.financier ? idOf(existing.financier) : undefined),
+          loanOptionId: dto.loanOptionId,
+        },
+        idOf(existing.salesRep),
+        role,
+      );
+      Object.assign(updates, priced);
+      if (dto.customerId) updates.customer = dto.customerId;
     }
 
-    // Full recalculation when proposal content changes
-    const existing = await this.findById(id);
-    const salesRepId = (existing.salesRep as any)?._id?.toString() ?? existing.salesRep.toString();
-    const merged: CreateProposalDto = {
-      customerId: dto.customerId ?? (existing.customer as any)?._id?.toString() ?? existing.customer.toString(),
-      waterType: dto.waterType ?? existing.waterType,
-      packageId: dto.packageId ?? (existing.package as any)?._id?.toString() ?? existing.package.toString(),
-      adderIds: dto.adderIds ?? existing.adders.map((a: any) => a._id?.toString() ?? a.toString()),
-      salesMargin: dto.salesMargin ?? existing.salesMargin,
-      financierId: dto.financierId ?? (existing.financier as any)?._id?.toString() ?? undefined,
-      loanOptionId: dto.loanOptionId,
-    };
-
-    const fresh = await this.create(merged, salesRepId);
-    await this.proposalModel.findByIdAndDelete(fresh._id);
-
     const updated = await this.proposalModel
-      .findByIdAndUpdate(
-        id,
-        {
-          ...fresh.toObject(),
-          _id: undefined,
-          status: dto.status ?? existing.status,
-        },
-        { new: true },
-      )
-      .populate('customer', 'name email phone address')
-      .populate('salesRep', 'name email')
-      .populate('package', 'name price waterType inclusions maxMargin')
-      .populate('adders', 'name price')
-      .populate('financier', 'name')
+      .findByIdAndUpdate(id, updates, { new: true })
+      .populate(POPULATE)
       .exec();
     if (!updated) throw new NotFoundException('Proposal not found');
     return updated;

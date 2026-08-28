@@ -52,6 +52,10 @@ export class Package {
   @Prop({ type: [String], default: [] })
   inclusions: string[];
 
+  /** Product image shown on the customer-facing proposal. */
+  @Prop({ type: String, trim: true, default: null })
+  imageUrl: string | null;
+
   /** Maximum sales margin (dollars) a rep can add. 0 = no margin allowed. */
   @Prop({ type: Number, default: 0, min: 0 })
   maxMargin: number;
