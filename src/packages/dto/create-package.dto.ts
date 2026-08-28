@@ -45,6 +45,10 @@ export class CreatePackageDto {
   inclusions?: string[];
 
   @IsOptional()
+  @IsString()
+  imageUrl?: string;
+
+  @IsOptional()
   @IsNumber()
   @Min(0)
   maxMargin?: number;
