@@ -1,4 +1,4 @@
-import { IsEmail, IsEnum, IsMongoId, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsArray, IsEmail, IsEnum, IsMongoId, IsOptional, IsString, MinLength } from 'class-validator';
 import { Role } from '../../common/enums/role.enum';
 
 export class CreateUserDto {
@@ -38,4 +38,10 @@ export class CreateUserDto {
   @IsOptional()
   @IsMongoId()
   partner?: string;
+
+  /** Empty/omitted = access to all packages. */
+  @IsOptional()
+  @IsArray()
+  @IsMongoId({ each: true })
+  allowedPackages?: string[];
 }
