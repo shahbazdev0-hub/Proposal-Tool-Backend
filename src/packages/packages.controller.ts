@@ -20,12 +20,17 @@ export class PackagesController {
     @CurrentUser() user: AuthenticatedUser,
     @Query('waterType') waterType?: WaterType,
   ) {
-    const packages = await this.packagesService.findAll(waterType);
+    const packages = await this.packagesService.findAllForUser(
+      user.userId,
+      user.role,
+      waterType,
+    );
     return packages.map((pkg) => PackagesService.sanitizeForRole(pkg, user.role));
   }
 
   @Get(':id')
   async findOne(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
+    await this.packagesService.assertUserMayUse(user.userId, user.role, id);
     const pkg = await this.packagesService.findById(id);
     return PackagesService.sanitizeForRole(pkg, user.role);
   }
