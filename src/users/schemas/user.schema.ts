@@ -27,6 +27,14 @@ export class User {
   @Prop({ default: true })
   isActive: boolean;
 
+  /**
+   * Catalog access control (scope §3). Empty = this user may quote every active
+   * package. Non-empty = the user only sees and may quote the listed packages.
+   * Mirrors the Adder.applicablePackages convention.
+   */
+  @Prop({ type: [{ type: Types.ObjectId, ref: 'Package' }], default: [] })
+  allowedPackages: Types.ObjectId[];
+
   // Upline chain — who this user's deals roll commissions up to.
   // Set by Admin only; drives override payouts in the commission engine.
   @Prop({ type: Types.ObjectId, ref: User.name, default: null })
