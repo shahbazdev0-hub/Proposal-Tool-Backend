@@ -245,6 +245,7 @@ async function seedTest() {
         loanOptionId: fWithLoan ? (fWithLoan.loanOptions[0]._id as Types.ObjectId).toString() : undefined,
       },
       rep1Id,
+      Role.ADMIN,
     );
     await proposalModel.findByIdAndUpdate(p1._id, { status: 'sent' });
     console.log(`  created  Proposal for ${cust1.name} — Supreme Gold — $${p1.cashPrice} cash — status: sent`);
@@ -259,6 +260,7 @@ async function seedTest() {
         salesMargin: 0,
       },
       rep1Id,
+      Role.ADMIN,
     );
     await proposalModel.findByIdAndUpdate(p2._id, { status: 'accepted' });
     console.log(`  created  Proposal for ${cust2.name} — Supreme Silver — $${p2.cashPrice} cash — status: accepted`);
@@ -273,6 +275,7 @@ async function seedTest() {
         salesMargin: 0,
       },
       rep1Id,
+      Role.ADMIN,
     );
     console.log(`  created  Proposal for ${cust3.name} — Homewater Platinum XL — $${p3.cashPrice} cash — status: draft`);
 
@@ -288,6 +291,7 @@ async function seedTest() {
         loanOptionId: fWithLoan ? (fWithLoan.loanOptions[0]._id as Types.ObjectId).toString() : undefined,
       },
       rep1Id,
+      Role.ADMIN,
     );
     await proposalModel.findByIdAndUpdate(p4._id, { status: 'declined' });
     console.log(`  created  Proposal for ${cust4.name} — Supreme Gold — $${p4.cashPrice} cash — status: declined`);
@@ -304,6 +308,7 @@ async function seedTest() {
         loanOptionId: fWithLoan ? (fWithLoan.loanOptions[0]._id as Types.ObjectId).toString() : undefined,
       },
       rep1Id,
+      Role.ADMIN,
     );
     await proposalModel.findByIdAndUpdate(p5._id, { status: 'converted' });
     console.log(`  created  Proposal for ${cust5.name} — Supreme Silver — $${p5.cashPrice} cash — status: converted`);
