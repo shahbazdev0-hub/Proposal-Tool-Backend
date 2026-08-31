@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import PDFDocument from 'pdfkit';
 import { SettingsService } from '../settings/settings.service';
 import { ProposalDocument } from './schemas/proposal.schema';
@@ -51,10 +51,11 @@ interface PriceRow {
 
 /** Shape of a proposal after ProposalsService POPULATE has run. */
 interface PopulatedProposal {
-  customer: { name: string; address: string; phone?: string; email?: string };
-  salesRep: { name: string; email: string };
+  // Populated references: Mongoose yields null when the target was deleted.
+  customer: { name: string; address: string; phone?: string; email?: string } | null;
+  salesRep: { name: string; email: string } | null;
   waterType: string;
-  package: { name: string; price: number; inclusions: string[]; imageUrl: string | null };
+  package: { name: string; price: number; inclusions: string[]; imageUrl: string | null } | null;
   adders: { name: string; price: number }[];
   addersTotal: number;
   salesMargin: number;
@@ -101,6 +102,21 @@ export class ProposalPdfService {
 
   async generate(proposal: ProposalDocument): Promise<Buffer> {
     const p = proposal.toObject() as unknown as PopulatedProposal;
+
+    // Populated references come back null when the referenced document was
+    // deleted. Every section below dereferences these, so fail with a clear
+    // 400 rather than a 500 from a null property read.
+    if (!p.customer || !p.package || !p.salesRep) {
+      const missing = [
+        !p.customer ? 'customer' : null,
+        !p.package ? 'package' : null,
+        !p.salesRep ? 'sales rep' : null,
+      ].filter((x): x is string => x !== null);
+      throw new BadRequestException(
+        `This proposal refers to a ${missing.join(' and ')} that no longer exists, so a PDF cannot be generated.`,
+      );
+    }
+
     const settings = await this.settingsService.get();
     const accent = settings.primaryColor || '#1e293b';
 
