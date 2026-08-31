@@ -24,7 +24,7 @@ async function bootstrap() {
   app.setGlobalPrefix('api');
 
   const swaggerConfig = new DocumentBuilder()
-    .setTitle('Commission Tracker API')
+    .setTitle('Proposal Tool API')
     .setVersion('1.0')
     .addBearerAuth()
     .build();
