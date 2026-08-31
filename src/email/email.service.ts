@@ -96,7 +96,7 @@ export class EmailService {
     <!-- Footer -->
     <div style="padding:16px 32px;border-top:1px solid #e2e8f0;text-align:center">
       <p style="margin:0;font-size:11px;color:#94a3b8">
-        This email was sent automatically by Commission Tracker.
+        This email was sent automatically by Proposal Tool.
       </p>
     </div>
 
