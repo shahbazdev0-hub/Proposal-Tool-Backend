@@ -15,6 +15,7 @@ import { ControlPanelModule } from './control-panel/control-panel.module';
 import { CustomersModule } from './customers/customers.module';
 import { ProposalsModule } from './proposals/proposals.module';
 import { SettingsModule } from './settings/settings.module';
+import { UploadsModule } from './uploads/uploads.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { SettingsModule } from './settings/settings.module';
     CustomersModule,
     ProposalsModule,
     SettingsModule,
+    UploadsModule,
   ],
 })
 export class AppModule {}
