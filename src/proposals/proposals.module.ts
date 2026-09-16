@@ -8,6 +8,7 @@ import { PackagesModule } from '../packages/packages.module';
 import { AddersModule } from '../adders/adders.module';
 import { FinanciersModule } from '../financiers/financiers.module';
 import { SettingsModule } from '../settings/settings.module';
+import { ControlPanelModule } from '../control-panel/control-panel.module';
 import { EmailModule } from '../email/email.module';
 
 @Module({
@@ -17,6 +18,7 @@ import { EmailModule } from '../email/email.module';
     AddersModule,
     FinanciersModule,
     SettingsModule,
+    ControlPanelModule,
     EmailModule,
   ],
   controllers: [ProposalsController],

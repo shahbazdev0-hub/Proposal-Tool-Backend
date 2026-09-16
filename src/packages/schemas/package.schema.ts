@@ -52,10 +52,6 @@ export class Package {
   @Prop({ type: [String], default: [] })
   inclusions: string[];
 
-  /** Product image shown on the customer-facing proposal. */
-  @Prop({ type: String, trim: true, default: null })
-  imageUrl: string | null;
-
   /**
    * Whether a rep may add any sales margin to this package (scope §11,
    * "enable/disable margin where necessary"). Kept separate from maxMargin so

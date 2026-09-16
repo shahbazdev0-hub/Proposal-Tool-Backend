@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Proposal, ProposalDocument } from './schemas/proposal.schema';
@@ -14,7 +19,7 @@ import { Role } from '../common/enums/role.enum';
 const POPULATE = [
   { path: 'customer', select: 'name email phone address' },
   { path: 'salesRep', select: 'name email' },
-  { path: 'package', select: 'name price waterType inclusions maxMargin imageUrl' },
+  { path: 'package', select: 'name price waterType inclusions maxMargin productType' },
   { path: 'adders', select: 'name price' },
   { path: 'financier', select: 'name' },
 ];
@@ -186,7 +191,14 @@ export class ProposalsService {
       (v as { _id?: { toString(): string } })?._id?.toString() ?? String(v);
 
     const updates: Record<string, unknown> = {};
-    if (dto.status !== undefined) updates.status = dto.status;
+    if (dto.status !== undefined) {
+      // Client rule: only an admin may move a proposal between statuses. Reps
+      // create and edit proposals, but never advance them.
+      if (role !== Role.ADMIN) {
+        throw new ForbiddenException('Only an admin can change a proposal status.');
+      }
+      updates.status = dto.status;
+    }
     if (dto.convertedSaleId !== undefined) updates.convertedSaleId = dto.convertedSaleId;
 
     // Any change to a priced input re-runs the whole calculation, so an edited
