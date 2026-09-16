@@ -56,9 +56,22 @@ export class Package {
   @Prop({ type: String, trim: true, default: null })
   imageUrl: string | null;
 
-  /** Maximum sales margin (dollars) a rep can add. 0 = no margin allowed. */
-  @Prop({ type: Number, default: 0, min: 0 })
-  maxMargin: number;
+  /**
+   * Whether a rep may add any sales margin to this package (scope §11,
+   * "enable/disable margin where necessary"). Kept separate from maxMargin so
+   * "margin is switched off" and "the ceiling happens to be zero" stay
+   * distinguishable — an admin reading a 0 can otherwise not tell which.
+   */
+  @Prop({ default: true })
+  marginEnabled: boolean;
+
+  /**
+   * Maximum sales margin in dollars. null = inherit the product's ceiling
+   * (ConfigOption.maxMargin for this package's productType). A number is an
+   * explicit override, including 0.
+   */
+  @Prop({ type: Number, default: null, min: 0 })
+  maxMargin: number | null;
 
   @Prop({ default: true })
   isActive: boolean;
