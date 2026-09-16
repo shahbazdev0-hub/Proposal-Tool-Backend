@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import {
+  IsBoolean,
   IsNumber,
   IsOptional,
   IsString,
@@ -49,7 +50,12 @@ export class CreatePackageDto {
   imageUrl?: string;
 
   @IsOptional()
+  @IsBoolean()
+  marginEnabled?: boolean;
+
+  /** null = inherit the product-level ceiling. */
+  @IsOptional()
   @IsNumber()
   @Min(0)
-  maxMargin?: number;
+  maxMargin?: number | null;
 }
