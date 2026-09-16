@@ -13,6 +13,18 @@ export class ConfigOption {
 
   @Prop({ default: true })
   isActive: boolean;
+
+  // ── Margin policy (only meaningful for category === 'product_type') ────────
+  // Scope §11 requires a maximum margin settable "by package/product". These
+  // hold the product-level default; a package may override it.
+
+  /** false = no margin may be added to any package of this product. */
+  @Prop({ default: true })
+  marginEnabled: boolean;
+
+  /** Default ceiling for packages of this product. null = no product default. */
+  @Prop({ type: Number, default: null, min: 0 })
+  maxMargin: number | null;
 }
 
 export const ConfigOptionSchema = SchemaFactory.createForClass(ConfigOption);
