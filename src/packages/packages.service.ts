@@ -2,18 +2,102 @@ import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/commo
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { UsersService } from '../users/users.service';
+import { ControlPanelService } from '../control-panel/control-panel.service';
+import { ConfigOptionDocument } from '../control-panel/schemas/config-option.schema';
 import { Package, PackageDocument } from './schemas/package.schema';
+import { ConfigOption } from '../control-panel/schemas/config-option.schema';
 import { CreatePackageDto } from './dto/create-package.dto';
 import { UpdatePackageDto } from './dto/update-package.dto';
 import { WaterType } from '../common/enums/water-type.enum';
 import { Role } from '../common/enums/role.enum';
+
+/** The margin rules that actually apply to a package, after inheritance. */
+export interface MarginPolicy {
+  /** false = no margin may be added at all. */
+  enabled: boolean;
+  /** Ceiling in dollars. Only meaningful when enabled. */
+  cap: number;
+  /** Where the ceiling came from, for display in the admin UI. */
+  source: 'package' | 'product' | 'none';
+}
+
+const PRODUCT_TYPE_CATEGORY = 'product_type';
 
 @Injectable()
 export class PackagesService {
   constructor(
     @InjectModel(Package.name) private readonly packageModel: Model<PackageDocument>,
     private readonly usersService: UsersService,
+    private readonly controlPanelService: ControlPanelService,
   ) {}
+
+  /** Products are Control Panel options, matched to a package by label. */
+  private static matchProduct(
+    options: ConfigOptionDocument[],
+    productType: string | null | undefined,
+  ): ConfigOptionDocument | null {
+    if (!productType) return null;
+    const key = productType.trim().toLowerCase();
+    return options.find((o) => o.label.trim().toLowerCase() === key) ?? null;
+  }
+
+  /**
+   * Scope §11: the ceiling is settable "by package/product". A package-level
+   * value always wins; null means inherit the product's. Either level can
+   * switch margin off entirely, and disabling at the product level disables it
+   * for every package underneath.
+   */
+  static resolveMarginPolicy(
+    pkg: Pick<Package, 'marginEnabled' | 'maxMargin'>,
+    product: Pick<ConfigOption, 'marginEnabled' | 'maxMargin'> | null,
+  ): MarginPolicy {
+    const enabled = (product?.marginEnabled ?? true) && (pkg.marginEnabled ?? true);
+    if (!enabled) return { enabled: false, cap: 0, source: 'none' };
+    if (pkg.maxMargin != null) {
+      return { enabled: true, cap: pkg.maxMargin, source: 'package' };
+    }
+    if (product?.maxMargin != null) {
+      return { enabled: true, cap: product.maxMargin, source: 'product' };
+    }
+    return { enabled: true, cap: 0, source: 'none' };
+  }
+
+  /** Policy for a single package, resolving its product on the way. */
+  async getMarginPolicy(pkg: PackageDocument): Promise<MarginPolicy> {
+    const options = await this.controlPanelService.findByCategory(PRODUCT_TYPE_CATEGORY);
+    return PackagesService.resolveMarginPolicy(
+      pkg,
+      PackagesService.matchProduct(options, pkg.productType),
+    );
+  }
+
+  /**
+   * Sanitises for the role and attaches the resolved policy, so clients never
+   * have to re-implement the inheritance rules.
+   */
+  async presentMany(
+    packages: PackageDocument[],
+    role: Role,
+  ): Promise<Record<string, unknown>[]> {
+    const options = await this.controlPanelService.findByCategory(PRODUCT_TYPE_CATEGORY);
+    return packages.map((pkg) => {
+      const policy = PackagesService.resolveMarginPolicy(
+        pkg,
+        PackagesService.matchProduct(options, pkg.productType),
+      );
+      return {
+        ...PackagesService.sanitizeForRole(pkg, role),
+        effectiveMarginEnabled: policy.enabled,
+        effectiveMaxMargin: policy.cap,
+        marginSource: policy.source,
+      };
+    });
+  }
+
+  async presentOne(pkg: PackageDocument, role: Role): Promise<Record<string, unknown>> {
+    const [presented] = await this.presentMany([pkg], role);
+    return presented;
+  }
 
   // Admin and Ops run the catalog, so they always see everything. For everyone
   // else an empty allowedPackages list means "no restriction configured" — the
