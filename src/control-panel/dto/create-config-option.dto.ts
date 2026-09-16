@@ -11,6 +11,10 @@ export class CreateConfigOptionDto {
   @Min(0)
   maxMargin?: number | null;
 
+  @IsOptional()
+  @IsString()
+  imageUrl?: string | null;
+
   @IsString()
   @IsNotEmpty()
   category: string;

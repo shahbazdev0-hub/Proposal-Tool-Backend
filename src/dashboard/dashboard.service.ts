@@ -9,7 +9,14 @@ export type ScopeField = 'salesRep' | 'directRecruiter' | 'teamLead' | 'regional
 
 // Fixed order so the status chart keeps a stable, meaningful sequence rather
 // than whatever order the aggregation happens to return.
-const STATUS_ORDER = ['draft', 'sent', 'accepted', 'declined', 'converted'] as const;
+const STATUS_ORDER = [
+  'draft',
+  'sent',
+  'approved',
+  'closed',
+  'cancel',
+  'converted',
+] as const;
 
 @Injectable()
 export class DashboardService {
@@ -58,11 +65,12 @@ export class DashboardService {
     const convertedRow = rows.find((r) => r.status === 'converted');
     const converted = convertedRow?.count ?? 0;
     const convertedValue = convertedRow?.value ?? 0;
-    const accepted = rows.find((r) => r.status === 'accepted')?.count ?? 0;
+    const accepted = rows.find((r) => r.status === 'approved')?.count ?? 0;
 
-    // Open pipeline = still winnable: drafted, sent or accepted but not yet a sale.
+    // Open pipeline = still winnable: drafted, sent or approved but not yet a
+    // sale. Closed and cancelled are out; converted has already become revenue.
     const openValue = rows
-      .filter((r) => r.status === 'draft' || r.status === 'sent' || r.status === 'accepted')
+      .filter((r) => r.status === 'draft' || r.status === 'sent' || r.status === 'approved')
       .reduce((sum, r) => sum + r.value, 0);
 
     const proposalsByStatus = STATUS_ORDER.map(
