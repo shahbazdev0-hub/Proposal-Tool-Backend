@@ -25,26 +25,34 @@ export class PackagesController {
       user.role,
       waterType,
     );
-    return packages.map((pkg) => PackagesService.sanitizeForRole(pkg, user.role));
+    return this.packagesService.presentMany(packages, user.role);
   }
 
   @Get(':id')
   async findOne(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
     await this.packagesService.assertUserMayUse(user.userId, user.role, id);
     const pkg = await this.packagesService.findById(id);
-    return PackagesService.sanitizeForRole(pkg, user.role);
+    return this.packagesService.presentOne(pkg, user.role);
   }
 
+  // Writes return the same enriched shape as reads, so a client never sees a
+  // package without its resolved margin policy.
   @Roles(Role.ADMIN)
   @Post()
-  create(@Body() dto: CreatePackageDto) {
-    return this.packagesService.create(dto);
+  async create(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreatePackageDto) {
+    const pkg = await this.packagesService.create(dto);
+    return this.packagesService.presentOne(pkg, user.role);
   }
 
   @Roles(Role.ADMIN)
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: UpdatePackageDto) {
-    return this.packagesService.update(id, dto);
+  async update(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() dto: UpdatePackageDto,
+  ) {
+    const pkg = await this.packagesService.update(id, dto);
+    return this.packagesService.presentOne(pkg, user.role);
   }
 
   @Roles(Role.ADMIN)
