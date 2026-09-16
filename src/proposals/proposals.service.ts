@@ -86,14 +86,19 @@ export class ProposalsService {
       addersTotal = selected.reduce((sum, a) => sum + a.price, 0);
     }
 
-    // Margin cap. maxMargin of 0 means "no margin allowed" (see Package schema),
-    // so the ceiling is enforced unconditionally — including at zero.
-    const maxMargin = pkg.maxMargin ?? 0;
-    if (dto.salesMargin > maxMargin) {
+    // Margin policy, resolved across the package and its product (scope §11).
+    // Either level can switch margin off; a package ceiling overrides the
+    // product's, and null inherits it.
+    const margin = await this.packagesService.getMarginPolicy(pkg);
+    if (!margin.enabled) {
+      if (dto.salesMargin > 0) {
+        throw new BadRequestException('Sales margin is disabled for this package.');
+      }
+    } else if (dto.salesMargin > margin.cap) {
       throw new BadRequestException(
-        maxMargin === 0
-          ? 'This package does not allow a sales margin.'
-          : `Sales margin cannot exceed $${maxMargin} for this package.`,
+        margin.cap === 0
+          ? 'No sales margin ceiling is configured for this package or its product.'
+          : `Sales margin cannot exceed $${margin.cap} for this package.`,
       );
     }
 
