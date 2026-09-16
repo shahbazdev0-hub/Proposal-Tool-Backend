@@ -250,7 +250,7 @@ async function seedTest() {
     await proposalModel.findByIdAndUpdate(p1._id, { status: 'sent' });
     console.log(`  created  Proposal for ${cust1.name} — Supreme Gold — $${p1.cashPrice} cash — status: sent`);
 
-    // Proposal 2 — Supreme Silver, cash, status: accepted
+    // Proposal 2 — Supreme Silver, cash, status: approved
     const p2 = await proposalsService.create(
       {
         customerId: (cust2._id as Types.ObjectId).toString(),
@@ -262,8 +262,8 @@ async function seedTest() {
       rep1Id,
       Role.ADMIN,
     );
-    await proposalModel.findByIdAndUpdate(p2._id, { status: 'accepted' });
-    console.log(`  created  Proposal for ${cust2.name} — Supreme Silver — $${p2.cashPrice} cash — status: accepted`);
+    await proposalModel.findByIdAndUpdate(p2._id, { status: 'approved' });
+    console.log(`  created  Proposal for ${cust2.name} — Supreme Silver — $${p2.cashPrice} cash — status: approved`);
 
     // Proposal 3 — Homewater Platinum XL, cash, status: draft
     const p3 = await proposalsService.create(
@@ -279,7 +279,7 @@ async function seedTest() {
     );
     console.log(`  created  Proposal for ${cust3.name} — Homewater Platinum XL — $${p3.cashPrice} cash — status: draft`);
 
-    // Proposal 4 — Supreme Gold, financed, status: declined
+    // Proposal 4 — Supreme Gold, financed, status: cancel
     const p4 = await proposalsService.create(
       {
         customerId: (cust4._id as Types.ObjectId).toString(),
@@ -293,8 +293,8 @@ async function seedTest() {
       rep1Id,
       Role.ADMIN,
     );
-    await proposalModel.findByIdAndUpdate(p4._id, { status: 'declined' });
-    console.log(`  created  Proposal for ${cust4.name} — Supreme Gold — $${p4.cashPrice} cash — status: declined`);
+    await proposalModel.findByIdAndUpdate(p4._id, { status: 'cancel' });
+    console.log(`  created  Proposal for ${cust4.name} — Supreme Gold — $${p4.cashPrice} cash — status: cancel`);
 
     // Proposal 5 — Supreme Silver, financed, status: converted
     const p5 = await proposalsService.create(
