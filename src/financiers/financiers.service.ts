@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Financier, FinancierDocument } from './schemas/financier.schema';
@@ -43,8 +43,32 @@ export class FinanciersService {
     }
   }
 
+  /**
+   * Two programs under the same financier must not share a name — a rep picking
+   * from the dropdown would have no way to tell them apart, and the label is
+   * what gets snapshotted onto the proposal.
+   */
+  private static assertLabelIsFree(
+    financier: FinancierDocument,
+    label: string,
+    ignoreLoanOptionId?: string,
+  ): void {
+    const key = label.trim().toLowerCase();
+    const clash = financier.loanOptions.find(
+      (lo) =>
+        lo.label.trim().toLowerCase() === key &&
+        lo._id?.toString() !== ignoreLoanOptionId,
+    );
+    if (clash) {
+      throw new ConflictException(
+        `"${label.trim()}" already exists for this financier.`,
+      );
+    }
+  }
+
   async addLoanOption(id: string, dto: LoanOptionDto): Promise<FinancierDocument> {
     const financier = await this.findById(id);
+    FinanciersService.assertLabelIsFree(financier, dto.label);
     financier.loanOptions.push({
       label: dto.label,
       dealerFeePercent: dto.dealerFeePercent,
@@ -66,6 +90,8 @@ export class FinanciersService {
     if (!loanOption) {
       throw new NotFoundException('Loan option not found');
     }
+    // Ignore this option's own id so re-saving without a rename is allowed.
+    FinanciersService.assertLabelIsFree(financier, dto.label, loanOptionId);
     loanOption.label = dto.label;
     loanOption.dealerFeePercent = dto.dealerFeePercent;
     loanOption.loanTerm = dto.loanTerm ?? null;

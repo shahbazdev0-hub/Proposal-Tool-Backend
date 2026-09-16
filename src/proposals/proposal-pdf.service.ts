@@ -1,37 +1,38 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import PDFDocument from 'pdfkit';
 import { SettingsService } from '../settings/settings.service';
+import { ControlPanelService } from '../control-panel/control-panel.service';
 import { ProposalDocument } from './schemas/proposal.schema';
 
-// This renderer is a deliberate 1:1 port of the print stylesheet in
+// A deliberate 1:1 port of the print stylesheet in
 // frontend/src/app/(protected)/proposals/[id]/page.tsx, so "Print" and
-// "Download PDF" produce the same document. Any change to one must be
-// mirrored in the other — the measurements below map directly to that CSS.
+// "Download PDF" produce the same document. Change one, change the other —
+// the measurements below map directly to that CSS.
 
 const CM = 28.3465; // 1cm in PostScript points
 const PAGE_W = 612; // LETTER
 const PAGE_H = 792;
-const MARGIN = { top: 1.5 * CM, bottom: 1.5 * CM, left: 2 * CM, right: 2 * CM };
-const CW = PAGE_W - MARGIN.left - MARGIN.right; // content width
+const GUTTER = 1.6 * CM; // matches the CSS side padding
+const CW = PAGE_W - GUTTER * 2;
+const BOTTOM = 1.2 * CM;
 
-// Palette lifted from the print CSS
-const INK = '#1a1a1a';
-const SLATE_900 = '#0f172a';
+// Palette
+const INK = '#0f172a';
 const SLATE_700 = '#334155';
 const SLATE_600 = '#475569';
 const SLATE_500 = '#64748b';
 const SLATE_400 = '#94a3b8';
-const GREY_666 = '#666666';
-const HAIRLINE = '#e2e8f0';
-const HAIRLINE_SOFT = '#f1f5f9';
-const BOX_BG = '#f8fafc';
-const TOTAL_BG = '#f1f5f9';
+const SLATE_300 = '#cbd5e1';
+const HAIRLINE = '#eef2f6';
+const RULE = '#e2e8f0';
+const FAINT = '#b0bac6';
+const WHITE = '#ffffff';
 
-const SERIF = 'Times-Roman';
-const SERIF_BOLD = 'Times-Bold';
-const SERIF_ITALIC = 'Times-Italic';
+// Modern & clean: sans-serif throughout, replacing the previous serif.
+const SANS = 'Helvetica';
+const SANS_BOLD = 'Helvetica-Bold';
+const SANS_OBLIQUE = 'Helvetica-Oblique';
 
-// Matches `$${n.toLocaleString()}` in the print template — no forced decimals.
 const money = (n: number): string => '$' + n.toLocaleString('en-US');
 
 const money2 = (n: number): string =>
@@ -43,19 +44,18 @@ const WATER_TYPE_LABELS: Record<string, string> = {
   h2pros: 'H2Pros',
 };
 
-interface PriceRow {
-  label: string;
-  value: string;
-  kind: 'normal' | 'total' | 'sub';
-}
-
 /** Shape of a proposal after ProposalsService POPULATE has run. */
 interface PopulatedProposal {
   // Populated references: Mongoose yields null when the target was deleted.
   customer: { name: string; address: string; phone?: string; email?: string } | null;
   salesRep: { name: string; email: string } | null;
   waterType: string;
-  package: { name: string; price: number; inclusions: string[]; imageUrl: string | null } | null;
+  package: {
+    name: string;
+    price: number;
+    inclusions: string[];
+    productType: string | null;
+  } | null;
   adders: { name: string; price: number }[];
   addersTotal: number;
   salesMargin: number;
@@ -75,12 +75,15 @@ interface PopulatedProposal {
 export class ProposalPdfService {
   private readonly logger = new Logger(ProposalPdfService.name);
 
-  constructor(private readonly settingsService: SettingsService) {}
+  constructor(
+    private readonly settingsService: SettingsService,
+    private readonly controlPanelService: ControlPanelService,
+  ) {}
 
   /**
-   * Remote images (logo, product shot) are configured as URLs, but PDFKit needs
-   * bytes. A broken or slow URL must never fail the whole download, so every
-   * fetch is time-boxed and failures fall through to "no image".
+   * Remote images are configured as URLs but PDFKit needs bytes. A broken or
+   * slow URL must never fail the whole download, so every fetch is time-boxed
+   * and failures fall through to "no image".
    */
   private async fetchImage(url: string | null | undefined): Promise<Buffer | null> {
     if (!url) return null;
@@ -98,6 +101,27 @@ export class ProposalPdfService {
       this.logger.warn(`Could not load image ${url}: ${(err as Error).message}`);
       return null;
     }
+  }
+
+  /**
+   * The proposal image comes from the product type (a Control Panel option),
+   * matched to the package by label, so one photo covers every package of that
+   * product rather than being set per package.
+   */
+  private async productImageUrl(productType: string | null | undefined) {
+    if (!productType) return null;
+    const options = await this.controlPanelService.findByCategory('product_type');
+    const key = productType.trim().toLowerCase();
+    const match = options.find((o) => o.label.trim().toLowerCase() === key);
+    return match?.imageUrl ?? null;
+  }
+
+  /** Stored paths are relative; the PDF runs server-side so make them absolute. */
+  private absolute(url: string | null): string | null {
+    if (!url) return null;
+    if (/^https?:\/\//i.test(url)) return url;
+    const port = process.env.PORT ?? '4000';
+    return `http://127.0.0.1:${port}${url.startsWith('/') ? '' : '/'}${url}`;
   }
 
   async generate(proposal: ProposalDocument): Promise<Buffer> {
@@ -118,183 +142,240 @@ export class ProposalPdfService {
     }
 
     const settings = await this.settingsService.get();
-    const accent = settings.primaryColor || '#1e293b';
+    const accent = settings.primaryColor || '#0d9488';
 
+    const productUrl = await this.productImageUrl(p.package.productType);
     const [logo, productImage] = await Promise.all([
-      this.fetchImage(settings.logoUrl),
-      this.fetchImage(p.package?.imageUrl),
+      this.fetchImage(this.absolute(settings.logoUrl)),
+      this.fetchImage(this.absolute(productUrl)),
     ]);
 
-    const doc = new PDFDocument({ size: 'LETTER', margins: MARGIN, bufferPages: true });
+    const doc = new PDFDocument({ size: 'LETTER', margin: 0, bufferPages: true });
     const chunks: Buffer[] = [];
     doc.on('data', (c: Buffer) => chunks.push(c));
     const done = new Promise<void>((resolve) => doc.on('end', () => resolve()));
 
-    const L = MARGIN.left;
-    const R = MARGIN.left + CW;
-    let y = MARGIN.top;
+    const L = GUTTER;
+    const R = GUTTER + CW;
+    let y = 0;
 
-    /** Start a new page when the next block would overflow the bottom margin. */
     const ensure = (needed: number): void => {
-      if (y + needed > PAGE_H - MARGIN.bottom) {
+      if (y + needed > PAGE_H - BOTTOM) {
         doc.addPage();
-        y = MARGIN.top;
+        y = GUTTER;
       }
     };
 
-    const hr = (yy: number, color: string, width: number): void => {
-      doc.moveTo(L, yy).lineTo(R, yy).lineWidth(width).strokeColor(color).stroke();
-    };
+    // ── Header band ───────────────────────────────────────────────────────────
+    const bandH = 2.1 * CM;
+    doc.rect(0, 0, PAGE_W, bandH).fillColor(accent).fill();
 
-    // ── Header ────────────────────────────────────────────────────────────────
-    const headerTop = y;
-    let companyX = L;
+    let textX = L;
     if (logo) {
       try {
-        doc.image(logo, L, headerTop, { fit: [110, 50] });
-        companyX = L + 110 + 0.5 * CM;
+        doc.image(logo, L, (bandH - 40) / 2, { fit: [110, 40] });
+        textX = L + 110 + 0.4 * CM;
       } catch {
         /* undecodable — fall back to the wordmark alone */
       }
     }
 
-    const titleW = 200;
-    const titleX = R - titleW;
-
-    // Company name + tagline (left/centre)
+    const hasTagline = !!settings.companyTagline;
     doc
-      .font(SERIF_BOLD)
-      .fontSize(18)
-      .fillColor(INK)
-      .text(settings.companyName, companyX, headerTop + 2, {
-        width: titleX - companyX - 10,
+      .font(SANS_BOLD)
+      .fontSize(15)
+      .fillColor(WHITE)
+      .text(settings.companyName, textX, bandH / 2 - (hasTagline ? 14 : 7), {
+        width: CW * 0.55,
         lineBreak: false,
       });
-    let companyBottom = doc.y;
-    if (settings.companyTagline) {
+    if (hasTagline) {
       doc
-        .font(SERIF_ITALIC)
-        .fontSize(10)
-        .fillColor(GREY_666)
-        .text(settings.companyTagline, companyX, companyBottom + 2, {
-          width: titleX - companyX - 10,
-        });
-      companyBottom = doc.y;
+        .font(SANS)
+        .fontSize(8.5)
+        .fillColor(WHITE)
+        .opacity(0.85)
+        .text(settings.companyTagline as string, textX, doc.y + 1, {
+          width: CW * 0.55,
+          lineBreak: false,
+        })
+        .opacity(1);
     }
 
-    // Title + date (right)
     doc
-      .font(SERIF_BOLD)
-      .fontSize(14)
-      .fillColor(INK)
-      .text('Water Treatment Proposal', titleX, headerTop + 4, {
-        width: titleW,
+      .font(SANS_BOLD)
+      .fontSize(8)
+      .fillColor(WHITE)
+      .opacity(0.85)
+      .text('PROPOSAL', L, bandH / 2 - 13, {
+        width: CW,
         align: 'right',
-      });
+        characterSpacing: 1.6,
+      })
+      .opacity(1);
     doc
-      .font(SERIF)
+      .font(SANS)
       .fontSize(9)
-      .fillColor(GREY_666)
+      .fillColor(WHITE)
       .text(
         new Date(p.createdAt).toLocaleDateString('en-US', {
           year: 'numeric',
           month: 'long',
           day: 'numeric',
         }),
-        titleX,
-        doc.y + 4,
-        { width: titleW, align: 'right' },
+        L,
+        doc.y + 2,
+        { width: CW, align: 'right' },
       );
 
-    y = Math.max(companyBottom, doc.y, headerTop + (logo ? 50 : 0));
+    y = bandH + 0.8 * CM;
 
-    // ── Accent divider ────────────────────────────────────────────────────────
-    y += 0.4 * CM;
-    doc.roundedRect(L, y, CW, 3, 1.5).fillColor(accent).fill();
-    y += 3 + 0.6 * CM;
+    // ── Customer + headline figure ────────────────────────────────────────────
+    const boxW = 6.2 * CM;
+    const boxX = R - boxW;
+    const introTop = y;
 
-    /** Accent uppercase heading with a hairline rule underneath. */
-    const sectionTitle = (label: string): void => {
-      ensure(40);
-      doc
-        .font(SERIF_BOLD)
-        .fontSize(11)
-        .fillColor(accent)
-        .text(label.toUpperCase(), L, y, { width: CW, characterSpacing: 0.55 });
-      y = doc.y + 3;
-      hr(y, HAIRLINE, 1);
-      y += 0.3 * CM;
-    };
+    doc
+      .font(SANS_BOLD)
+      .fontSize(7.5)
+      .fillColor(SLATE_400)
+      .text('PREPARED FOR', L, introTop, { characterSpacing: 1.4 });
+    doc
+      .font(SANS_BOLD)
+      .fontSize(14)
+      .fillColor(INK)
+      .text(p.customer.name, L, doc.y + 3, { width: CW - boxW - 0.8 * CM });
+    doc.font(SANS).fontSize(9.5).fillColor(SLATE_600);
+    doc.text(p.customer.address, L, doc.y + 2, { width: CW - boxW - 0.8 * CM });
+    if (p.customer.phone) doc.text(p.customer.phone);
+    if (p.customer.email) doc.text(p.customer.email);
+    const customerBottom = doc.y;
 
-    // ── Prepared For ──────────────────────────────────────────────────────────
-    sectionTitle('Prepared For');
-    {
-      const padX = 0.5 * CM;
-      const padY = 0.3 * CM;
-      const boxW = CW * 0.55;
-      const innerW = boxW - padX * 2;
+    // Headline: monthly payment when financed, otherwise the cash total.
+    const financed = !!p.financier && p.monthlyPayment != null;
+    const padY = 10;
 
-      const lines: { text: string; font: string; size: number; color: string }[] = [
-        { text: p.customer.name, font: SERIF_BOLD, size: 13, color: INK },
-        { text: p.customer.address, font: SERIF, size: 11, color: SLATE_600 },
-      ];
-      if (p.customer.phone)
-        lines.push({ text: p.customer.phone, font: SERIF, size: 10, color: SLATE_500 });
-      if (p.customer.email)
-        lines.push({ text: p.customer.email, font: SERIF, size: 10, color: SLATE_500 });
+    // Measure before drawing: the sub-line wraps on long terms, and a fixed
+    // height pushed it outside the border.
+    const headLabel = financed ? 'ESTIMATED MONTHLY PAYMENT' : 'TOTAL INVESTMENT';
+    const headValue = financed
+      ? `${money2(p.monthlyPayment as number)}/mo`
+      : money(p.cashPrice);
+    const headSub = financed
+      ? [
+          p.loanTerm ? `${p.loanTerm} months` : 'Financed',
+          p.interestRate != null ? `${p.interestRate}% APR` : null,
+        ]
+          .filter(Boolean)
+          .join(' · ')
+      : 'Cash purchase';
 
-      let boxH = padY * 2;
-      for (const ln of lines) {
-        doc.font(ln.font).fontSize(ln.size);
-        boxH += doc.heightOfString(ln.text, { width: innerW }) + 2;
-      }
+    const innerW = boxW - 24;
+    doc.font(SANS_BOLD).fontSize(7.5);
+    const hLabel = doc.heightOfString(headLabel, { width: innerW, characterSpacing: 1 });
+    doc.font(SANS_BOLD).fontSize(24);
+    const hValue = doc.heightOfString(headValue, { width: innerW });
+    doc.font(SANS).fontSize(8.5);
+    const hSub = doc.heightOfString(headSub, { width: innerW });
+    const boxH = padY * 2 + hLabel + hValue + hSub + 4;
 
-      ensure(boxH + 10);
-      doc
-        .roundedRect(L, y, boxW, boxH, 6)
-        .fillAndStroke(BOX_BG, HAIRLINE);
+    doc.roundedRect(boxX, introTop, boxW, boxH, 8).lineWidth(1.5).strokeColor(accent).stroke();
 
-      let ty = y + padY;
-      for (const ln of lines) {
-        doc.font(ln.font).fontSize(ln.size).fillColor(ln.color);
-        doc.text(ln.text, L + padX, ty, { width: innerW });
-        ty = doc.y + 2;
-      }
-      y += boxH + 0.6 * CM;
-    }
+    doc
+      .font(SANS_BOLD)
+      .fontSize(7.5)
+      .fillColor(SLATE_500)
+      .text(headLabel, boxX + 12, introTop + padY, {
+        width: innerW,
+        align: 'right',
+        characterSpacing: 1,
+      });
+    doc
+      .font(SANS_BOLD)
+      .fontSize(24)
+      .fillColor(accent)
+      .text(headValue, boxX + 12, doc.y + 1, {
+        width: innerW,
+        align: 'right',
+        lineBreak: false,
+      });
+    doc
+      .font(SANS)
+      .fontSize(8.5)
+      .fillColor(SLATE_500)
+      .text(headSub, boxX + 12, doc.y + 1, { width: innerW, align: 'right' });
 
-    // ── Your System ───────────────────────────────────────────────────────────
-    sectionTitle('Your System');
+    y = Math.max(customerBottom, introTop + boxH) + 0.5 * CM;
 
+    // ── Hero image ────────────────────────────────────────────────────────────
     if (productImage) {
       try {
-        const imgH = 5 * CM;
-        ensure(imgH + 12);
-        doc.image(productImage, L, y, { fit: [CW, imgH], align: 'center' });
-        y += imgH + 0.4 * CM;
+        const heroH = 4.6 * CM;
+        ensure(heroH + 12);
+        doc.save();
+        doc.roundedRect(L, y, CW, heroH, 8).clip();
+        doc.image(productImage, L, y, { cover: [CW, heroH], align: 'center', valign: 'center' });
+        doc.restore();
+        y += heroH + 0.5 * CM;
       } catch {
         /* ignore undecodable image */
       }
     }
 
+    /** Section heading with a short accent rule beneath it. */
+    const section = (title: string): void => {
+      ensure(48);
+      doc.font(SANS_BOLD).fontSize(11).fillColor(INK).text(title, L, y);
+      y = doc.y + 4;
+      doc.roundedRect(L, y, 1.1 * CM, 2.5, 1.25).fillColor(accent).fill();
+      y += 2.5 + 0.32 * CM;
+    };
+
+    /** Label left, amount right, on one baseline. */
+    const line = (
+      label: string,
+      value: string,
+      kind: 'normal' | 'total' | 'muted' = 'normal',
+    ): void => {
+      const size = kind === 'total' ? 11 : 9.5;
+      ensure(size * 2.2);
+      if (kind === 'total') {
+        doc.moveTo(L, y).lineTo(R, y).lineWidth(1.25).strokeColor(SLATE_300).stroke();
+        y += 5;
+      }
+      const font = kind === 'muted' ? SANS_OBLIQUE : kind === 'total' ? SANS_BOLD : SANS;
+      const colour = kind === 'muted' ? SLATE_400 : kind === 'total' ? INK : SLATE_700;
+      doc.font(font).fontSize(size).fillColor(colour);
+      doc.text(label, L, y, { width: CW * 0.62, lineBreak: false });
+      doc.text(value, L, y, { width: CW, align: 'right', lineBreak: false });
+      y += size * 1.35;
+      if (kind !== 'total') {
+        doc.moveTo(L, y).lineTo(R, y).lineWidth(0.75).strokeColor(HAIRLINE).stroke();
+        y += 4;
+      } else {
+        y += 3;
+      }
+    };
+
+    // ── Your system ───────────────────────────────────────────────────────────
+    section('Your system');
     {
-      // Two-column label/value grid
       const colW = CW / 2;
-      const cells: [string, string][] = [
-        ['Water Type', WATER_TYPE_LABELS[p.waterType] ?? p.waterType],
-        ['Package', p.package.name],
+      const specs: [string, string][] = [
+        ['WATER TYPE', WATER_TYPE_LABELS[p.waterType] ?? p.waterType],
+        ['PACKAGE', p.package.name],
       ];
-      ensure(34);
-      const gridTop = y;
-      cells.forEach(([label, value], i) => {
+      ensure(36);
+      const top = y;
+      specs.forEach(([label, value], i) => {
         const x = L + colW * i;
         doc
-          .font(SERIF)
-          .fontSize(8)
-          .fillColor(SLATE_500)
-          .text(label.toUpperCase(), x, gridTop, { width: colW - 10, characterSpacing: 0.35 });
+          .font(SANS_BOLD)
+          .fontSize(7.5)
+          .fillColor(SLATE_400)
+          .text(label, x, top, { width: colW - 10, characterSpacing: 1.2 });
         doc
-          .font(SERIF_BOLD)
+          .font(SANS_BOLD)
           .fontSize(11)
           .fillColor(INK)
           .text(value, x, doc.y + 1, { width: colW - 10 });
@@ -302,186 +383,108 @@ export class ProposalPdfService {
       y = doc.y + 0.3 * CM;
     }
 
-    /** Small bold uppercase label used above sub-lists. */
-    const subLabel = (label: string): void => {
-      ensure(24);
-      y += 0.2 * CM;
+    const sublabel = (text: string): void => {
+      ensure(26);
       doc
-        .font(SERIF_BOLD)
-        .fontSize(9)
-        .fillColor(SLATE_600)
-        .text(label.toUpperCase(), L, y, { width: CW, characterSpacing: 0.35 });
-      y = doc.y + 0.15 * CM;
+        .font(SANS_BOLD)
+        .fontSize(8)
+        .fillColor(SLATE_500)
+        .text(text, L, y, { characterSpacing: 1.2 });
+      y = doc.y + 0.18 * CM;
     };
 
     if (p.package.inclusions?.length) {
-      subLabel("What's Included");
-      // Two balanced bullet columns, mirroring `columns: 2` in the print CSS.
+      sublabel("WHAT'S INCLUDED");
+      // Two balanced columns, mirroring `columns: 2` in the print CSS.
       const half = Math.ceil(p.package.inclusions.length / 2);
-      const columns = [p.package.inclusions.slice(0, half), p.package.inclusions.slice(half)];
+      const cols = [p.package.inclusions.slice(0, half), p.package.inclusions.slice(half)];
       const colW = (CW - 1 * CM) / 2;
       const top = y;
       let lowest = y;
-      columns.forEach((items, ci) => {
+      cols.forEach((items, ci) => {
         if (!items.length) return;
         const x = L + ci * (colW + 1 * CM);
-        doc.font(SERIF).fontSize(10).fillColor(SLATE_700);
         let cy = top;
         for (const item of items) {
-          const h = doc.heightOfString(item, { width: colW - 12 });
-          doc.text('•', x, cy, { width: 8 });
-          doc.text(item, x + 12, cy, { width: colW - 12 });
-          cy += h + 2;
+          doc.font(SANS).fontSize(9.5).fillColor(SLATE_700);
+          const h = doc.heightOfString(item, { width: colW - 14 });
+          doc.circle(x + 2.5, cy + 5.5, 2).fillColor(SLATE_300).fill();
+          doc.fillColor(SLATE_700).text(item, x + 14, cy, { width: colW - 14 });
+          cy += h + 3;
         }
         lowest = Math.max(lowest, cy);
       });
-      y = lowest + 0.15 * CM;
+      y = lowest + 0.2 * CM;
     }
 
     if (p.adders?.length) {
-      subLabel('Add-ons');
-      doc.font(SERIF).fontSize(10);
-      for (const a of p.adders) {
-        ensure(20);
-        doc.fillColor(SLATE_700).text(a.name, L, y + 2, { width: CW * 0.7 });
-        doc.text(money(a.price), L, y + 2, { width: CW, align: 'right' });
-        const rowBottom = y + 2 + doc.currentLineHeight() + 2;
-        hr(rowBottom, HAIRLINE_SOFT, 1);
-        y = rowBottom;
-      }
+      sublabel('SELECTED UPGRADES');
+      for (const a of p.adders) line(a.name, money(a.price));
       y += 0.15 * CM;
     }
 
-    y += 0.6 * CM;
+    y += 0.35 * CM;
 
-    // ── Investment Summary ────────────────────────────────────────────────────
-    sectionTitle('Investment Summary');
-    {
-      const rows: PriceRow[] = [
-        { label: 'Package Base', value: money(p.package.price), kind: 'normal' },
-      ];
-      if (p.addersTotal > 0)
-        rows.push({ label: 'Add-ons', value: money(p.addersTotal), kind: 'normal' });
-      if (p.salesMargin > 0)
-        rows.push({ label: 'Additional', value: money(p.salesMargin), kind: 'normal' });
-      rows.push({ label: 'Cash Price', value: money(p.cashPrice), kind: 'total' });
+    // ── Investment summary ────────────────────────────────────────────────────
+    section('Investment summary');
+    line(`${p.package.name} package`, money(p.package.price));
+    if (p.addersTotal > 0) line('Upgrades', money(p.addersTotal));
+    if (p.salesMargin > 0) line('Options & installation', money(p.salesMargin));
+    line('Total cash price', money(p.cashPrice), 'total');
 
-      if (p.financier) {
-        rows.push({
-          label: `Dealer Fee (${p.dealerFeePercent}%)`,
-          value: money2(p.dealerFee),
-          kind: 'sub',
-        });
-        rows.push({
-          label: 'Financed Amount',
-          value: money2(p.financedAmount),
-          kind: 'total',
-        });
-      }
+    if (p.financier) {
+      line(`Dealer fee (${p.dealerFeePercent}%)`, money2(p.dealerFee), 'muted');
+      line('Amount financed', money2(p.financedAmount), 'total');
 
-      const padX = 12;
-      const rowH = (r: PriceRow) => (r.kind === 'total' ? 11 : 10) * 1.35 + 10;
-      const boxH = rows.reduce((sum, r) => sum + rowH(r), 0);
-
-      ensure(boxH + 16);
-      const boxTop = y;
-
-      // overflow: hidden — clip the alternating row fills to the rounded border
-      doc.save();
-      doc.roundedRect(L, boxTop, CW, boxH, 6).clip();
-
-      let ry = boxTop;
-      rows.forEach((r, i) => {
-        const h = rowH(r);
-        if (r.kind === 'total') {
-          doc.rect(L, ry, CW, h).fillColor(TOTAL_BG).fill();
-          doc.moveTo(L, ry).lineTo(R, ry).lineWidth(2).strokeColor(HAIRLINE).stroke();
-        } else if (i % 2 === 1) {
-          doc.rect(L, ry, CW, h).fillColor(BOX_BG).fill();
-        }
-        ry += h;
-      });
-      doc.restore();
-
-      // Text on top of the fills
-      ry = boxTop;
-      for (const r of rows) {
-        const h = rowH(r);
-        const size = r.kind === 'total' ? 11 : 10;
-        const font = r.kind === 'total' ? SERIF_BOLD : r.kind === 'sub' ? SERIF_ITALIC : SERIF;
-        const color =
-          r.kind === 'total' ? SLATE_900 : r.kind === 'sub' ? SLATE_500 : SLATE_600;
-        doc.font(font).fontSize(size).fillColor(color);
-        doc.text(r.label, L + padX, ry + 5, { width: CW - padX * 2, lineBreak: false });
-        doc.text(r.value, L + padX, ry + 5, {
-          width: CW - padX * 2,
-          align: 'right',
-          lineBreak: false,
-        });
-        ry += h;
-      }
-
-      doc.roundedRect(L, boxTop, CW, boxH, 6).lineWidth(1).strokeColor(HAIRLINE).stroke();
-      y = boxTop + boxH;
-
-      // Monthly payment banner
-      if (p.financier && p.monthlyPayment != null) {
-        y += 6;
-        const bannerH = 8 * 2 + 18 * 1.2;
-        ensure(bannerH + 10);
-        doc.roundedRect(L, y, CW, bannerH, 4).fillColor(accent).fill();
-        doc
-          .font(SERIF_BOLD)
-          .fontSize(11)
-          .fillColor('#ffffff')
-          .text('Monthly Payment', L + 12, y + bannerH / 2 - 6, {
-            width: CW - 24,
-            lineBreak: false,
-          });
-        doc
-          .font(SERIF_BOLD)
-          .fontSize(18)
-          .fillColor('#ffffff')
-          .text(`${money2(p.monthlyPayment)}/mo`, L + 12, y + bannerH / 2 - 11, {
-            width: CW - 24,
-            align: 'right',
-            lineBreak: false,
-          });
-        y += bannerH;
-      }
-
-      if (p.financier && p.loanOptionLabel) {
-        const note =
-          `${p.financier.name} · ${p.loanOptionLabel}` +
-          (p.loanTerm ? ` · ${p.loanTerm}-Month Term` : '') +
-          (p.interestRate != null ? ` · ${p.interestRate}% APR` : '');
-        ensure(20);
-        doc
-          .font(SERIF_ITALIC)
-          .fontSize(8)
-          .fillColor(SLATE_400)
-          .text(note, L + 12, y + 4, { width: CW - 24 });
-        y = doc.y;
-      }
+      const note = [
+        p.financier.name,
+        p.loanOptionLabel,
+        p.loanTerm ? `${p.loanTerm}-month term` : null,
+        p.interestRate != null ? `${p.interestRate}% APR` : null,
+      ]
+        .filter(Boolean)
+        .join(' · ');
+      ensure(20);
+      doc.font(SANS).fontSize(8).fillColor(SLATE_400).text(note, L, y + 4, { width: CW });
+      y = doc.y;
     }
 
     // ── Footer ────────────────────────────────────────────────────────────────
-    y += 0.8 * CM;
-    ensure(30);
-    hr(y, accent, 2);
-    y += 0.3 * CM;
-    doc.font(SERIF).fontSize(8).fillColor(SLATE_500);
+    y += 0.9 * CM;
+    ensure(46);
+    doc.moveTo(L, y).lineTo(R, y).lineWidth(0.75).strokeColor(RULE).stroke();
+    y += 0.25 * CM;
+
+    doc.font(SANS).fontSize(8).fillColor(SLATE_500);
     doc.text(settings.companyName, L, y, { width: CW / 3, lineBreak: false });
     doc.text(`Prepared by ${p.salesRep.name}`, L + CW / 3, y, {
       width: CW / 3,
       align: 'center',
       lineBreak: false,
     });
-    doc.text(new Date().toLocaleDateString('en-US'), L, y, {
-      width: CW,
-      align: 'right',
-      lineBreak: false,
-    });
+    doc.text(
+      new Date().toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      }),
+      L,
+      y,
+      { width: CW, align: 'right', lineBreak: false },
+    );
+    y += 0.22 * CM + 10;
+
+    doc
+      .font(SANS)
+      .fontSize(7.5)
+      .fillColor(FAINT)
+      .text(
+        'This proposal is an estimate. Financing terms are subject to lender approval and may vary. ' +
+          'The monthly payment shown is calculated from the payment factor for the selected program.',
+        L,
+        y,
+        { width: CW },
+      );
 
     doc.end();
     await done;
