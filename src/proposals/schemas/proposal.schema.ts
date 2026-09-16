@@ -3,7 +3,23 @@ import { Document, Types } from 'mongoose';
 
 export type ProposalDocument = Proposal & Document;
 
-export type ProposalStatus = 'draft' | 'sent' | 'accepted' | 'declined' | 'converted';
+export type ProposalStatus =
+  | 'draft'
+  | 'sent'
+  | 'approved'
+  | 'closed'
+  | 'cancel'
+  | 'converted';
+
+/** Single source of truth for the allowed values, shared with the DTO. */
+export const PROPOSAL_STATUSES: ProposalStatus[] = [
+  'draft',
+  'sent',
+  'approved',
+  'closed',
+  'cancel',
+  'converted',
+];
 
 @Schema({ timestamps: true })
 export class Proposal {
@@ -62,7 +78,7 @@ export class Proposal {
 
   @Prop({
     type: String,
-    enum: ['draft', 'sent', 'accepted', 'declined', 'converted'],
+    enum: PROPOSAL_STATUSES,
     default: 'draft',
   })
   status: ProposalStatus;
