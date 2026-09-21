@@ -14,6 +14,10 @@ export class Adder {
   @Prop({ default: true })
   isActive: boolean;
 
+  /** Thumbnail shown beside this upgrade on the customer-facing proposal. */
+  @Prop({ type: String, trim: true, default: null })
+  imageUrl: string | null;
+
   /** Empty = applies to all packages. Non-empty = only shown for listed packages. */
   @Prop({ type: [{ type: Types.ObjectId, ref: 'Package' }], default: [] })
   applicablePackages: Types.ObjectId[];

@@ -15,7 +15,7 @@ export class Settings {
   @Prop({ type: String, trim: true, default: null })
   companyTagline: string | null;
 
-  /** Full URL to the company logo image. */
+  /** Company logo: an uploaded path (/uploads/<file>) or an external URL. */
   @Prop({ type: String, trim: true, default: null })
   logoUrl: string | null;
 

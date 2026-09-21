@@ -46,6 +46,10 @@ export class CreatePackageDto {
   inclusions?: string[];
 
   @IsOptional()
+  @IsString()
+  imageUrl?: string | null;
+
+  @IsOptional()
   @IsBoolean()
   marginEnabled?: boolean;
 

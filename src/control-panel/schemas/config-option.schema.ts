@@ -27,9 +27,8 @@ export class ConfigOption {
   maxMargin: number | null;
 
   /**
-   * Product image shown on the customer-facing proposal (only meaningful for
-   * category === 'product_type'). Stored as a relative /uploads/... path so it
-   * survives a domain change.
+   * Product image shown on every proposal for this product (product_type only).
+   * An uploaded path (/uploads/<file>) or an external URL.
    */
   @Prop({ type: String, trim: true, default: null })
   imageUrl: string | null;

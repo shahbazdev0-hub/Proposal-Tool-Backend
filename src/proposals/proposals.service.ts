@@ -19,8 +19,8 @@ import { Role } from '../common/enums/role.enum';
 const POPULATE = [
   { path: 'customer', select: 'name email phone address' },
   { path: 'salesRep', select: 'name email' },
-  { path: 'package', select: 'name price waterType inclusions maxMargin productType' },
-  { path: 'adders', select: 'name price' },
+  { path: 'package', select: 'name price waterType inclusions maxMargin imageUrl' },
+  { path: 'adders', select: 'name price imageUrl' },
   { path: 'financier', select: 'name' },
 ];
 
@@ -130,8 +130,24 @@ export class ProposalsService {
       financier = dto.financierId;
       loanOptionLabel = loanOption.label;
       dealerFeePercent = loanOption.dealerFeePercent;
-      dealerFee = cashPrice * (dealerFeePercent / 100);
-      financedAmount = cashPrice + dealerFee;
+
+      // The dealer fee is a percentage OF THE FINANCED AMOUNT, not of the cash
+      // price — the lender funds the total, keeps its fee, and pays the dealer
+      // the cash price. So the amount is grossed up rather than added to:
+      //
+      //   financed = cash / (1 - fee%)      fee = financed - cash
+      //
+      // Verified against the client's existing tool: $5,700 at 7.2% gives
+      // $6,142.24 financed and $442.24 fee. Adding the fee on top would give
+      // $6,110.40, which is what this produced before and did not match.
+      const feeRate = dealerFeePercent / 100;
+      if (feeRate >= 1) {
+        throw new BadRequestException(
+          'Dealer fee must be below 100% — the financed amount cannot be calculated.',
+        );
+      }
+      financedAmount = cashPrice / (1 - feeRate);
+      dealerFee = financedAmount - cashPrice;
       loanTerm = loanOption.loanTerm ?? null;
       interestRate = loanOption.interestRate ?? null;
 
