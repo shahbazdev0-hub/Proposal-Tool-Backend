@@ -1,4 +1,4 @@
-import { IsHexColor, IsOptional, IsString, IsUrl } from 'class-validator';
+import { IsHexColor, IsOptional, IsString } from 'class-validator';
 
 export class UpdateSettingsDto {
   @IsOptional()
@@ -9,9 +9,11 @@ export class UpdateSettingsDto {
   @IsString()
   companyTagline?: string;
 
+  // Uploaded logos are stored as a relative path (/uploads/<file>), so this
+  // cannot be @IsUrl. null clears the logo.
   @IsOptional()
-  @IsUrl({ require_tld: false })
-  logoUrl?: string;
+  @IsString()
+  logoUrl?: string | null;
 
   @IsOptional()
   @IsHexColor()

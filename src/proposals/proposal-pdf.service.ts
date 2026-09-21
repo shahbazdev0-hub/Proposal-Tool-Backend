@@ -1,7 +1,6 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import PDFDocument from 'pdfkit';
 import { SettingsService } from '../settings/settings.service';
-import { ControlPanelService } from '../control-panel/control-panel.service';
 import { ProposalDocument } from './schemas/proposal.schema';
 
 // A deliberate 1:1 port of the print stylesheet in
@@ -54,9 +53,9 @@ interface PopulatedProposal {
     name: string;
     price: number;
     inclusions: string[];
-    productType: string | null;
+    imageUrl: string | null;
   } | null;
-  adders: { name: string; price: number }[];
+  adders: { name: string; price: number; imageUrl: string | null }[];
   addersTotal: number;
   salesMargin: number;
   cashPrice: number;
@@ -71,14 +70,48 @@ interface PopulatedProposal {
   createdAt: Date;
 }
 
+/**
+ * Intrinsic pixel dimensions from a PNG or JPEG header. PDFKit's own
+ * `openImage` is not in its type definitions, and the header is trivial to
+ * read for the only two formats uploads accepts.
+ */
+function imageSize(buf: Buffer): { width: number; height: number } | null {
+  // PNG: IHDR width/height are big-endian uint32 at bytes 16 and 20.
+  if (buf.length > 24 && buf.toString('ascii', 1, 4) === 'PNG') {
+    return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
+  }
+
+  // JPEG: walk the segment markers to the first SOFn frame header.
+  if (buf.length > 4 && buf[0] === 0xff && buf[1] === 0xd8) {
+    let i = 2;
+    while (i < buf.length - 9) {
+      if (buf[i] !== 0xff) {
+        i += 1;
+        continue;
+      }
+      const marker = buf[i + 1];
+      // SOF0-SOF15, excluding DHT (c4), JPG (c8) and DAC (cc).
+      if (
+        marker >= 0xc0 &&
+        marker <= 0xcf &&
+        marker !== 0xc4 &&
+        marker !== 0xc8 &&
+        marker !== 0xcc
+      ) {
+        return { height: buf.readUInt16BE(i + 5), width: buf.readUInt16BE(i + 7) };
+      }
+      i += 2 + buf.readUInt16BE(i + 2);
+    }
+  }
+
+  return null;
+}
+
 @Injectable()
 export class ProposalPdfService {
   private readonly logger = new Logger(ProposalPdfService.name);
 
-  constructor(
-    private readonly settingsService: SettingsService,
-    private readonly controlPanelService: ControlPanelService,
-  ) {}
+  constructor(private readonly settingsService: SettingsService) {}
 
   /**
    * Remote images are configured as URLs but PDFKit needs bytes. A broken or
@@ -101,19 +134,6 @@ export class ProposalPdfService {
       this.logger.warn(`Could not load image ${url}: ${(err as Error).message}`);
       return null;
     }
-  }
-
-  /**
-   * The proposal image comes from the product type (a Control Panel option),
-   * matched to the package by label, so one photo covers every package of that
-   * product rather than being set per package.
-   */
-  private async productImageUrl(productType: string | null | undefined) {
-    if (!productType) return null;
-    const options = await this.controlPanelService.findByCategory('product_type');
-    const key = productType.trim().toLowerCase();
-    const match = options.find((o) => o.label.trim().toLowerCase() === key);
-    return match?.imageUrl ?? null;
   }
 
   /** Stored paths are relative; the PDF runs server-side so make them absolute. */
@@ -144,10 +164,9 @@ export class ProposalPdfService {
     const settings = await this.settingsService.get();
     const accent = settings.primaryColor || '#0d9488';
 
-    const productUrl = await this.productImageUrl(p.package.productType);
     const [logo, productImage] = await Promise.all([
       this.fetchImage(this.absolute(settings.logoUrl)),
-      this.fetchImage(this.absolute(productUrl)),
+      this.fetchImage(this.absolute(p.package.imageUrl)),
     ]);
 
     const doc = new PDFDocument({ size: 'LETTER', margin: 0, bufferPages: true });
@@ -307,21 +326,6 @@ export class ProposalPdfService {
 
     y = Math.max(customerBottom, introTop + boxH) + 0.5 * CM;
 
-    // ── Hero image ────────────────────────────────────────────────────────────
-    if (productImage) {
-      try {
-        const heroH = 4.6 * CM;
-        ensure(heroH + 12);
-        doc.save();
-        doc.roundedRect(L, y, CW, heroH, 8).clip();
-        doc.image(productImage, L, y, { cover: [CW, heroH], align: 'center', valign: 'center' });
-        doc.restore();
-        y += heroH + 0.5 * CM;
-      } catch {
-        /* ignore undecodable image */
-      }
-    }
-
     /** Section heading with a short accent rule beneath it. */
     const section = (title: string): void => {
       ensure(48);
@@ -359,28 +363,60 @@ export class ProposalPdfService {
 
     // ── Your system ───────────────────────────────────────────────────────────
     section('Your system');
+
+    // Specs and inclusions occupy a left column; the package image sits to the
+    // right. Mirrors .pdf-system-split in the print CSS — it fills the width
+    // rather than leaving dead space either side of a centred image.
+    const IMG_W = 5.4 * CM;
+    const IMG_MAX_H = 5 * CM;
+    const GAP = 1 * CM;
+
+    let imgDrawnW = 0;
+    let imgDrawnH = 0;
+    if (productImage) {
+      const dims = imageSize(productImage);
+      if (dims) {
+        const scale = Math.min(IMG_W / dims.width, IMG_MAX_H / dims.height, 1);
+        imgDrawnW = dims.width * scale;
+        imgDrawnH = dims.height * scale;
+      }
+    }
+
+    // The text column narrows only when an image is actually being drawn.
+    const textW = imgDrawnW > 0 ? CW - IMG_W - GAP : CW;
+    const systemTop = y;
+
+    // Draw the image first so the text column can flow independently below it.
+    if (productImage && imgDrawnH > 0) {
+      try {
+        ensure(imgDrawnH + 12);
+        // Right-aligned within its column.
+        doc.image(productImage, R - imgDrawnW, systemTop, {
+          fit: [imgDrawnW, imgDrawnH],
+        });
+      } catch {
+        imgDrawnH = 0;
+      }
+    }
+
     {
-      const colW = CW / 2;
       const specs: [string, string][] = [
         ['WATER TYPE', WATER_TYPE_LABELS[p.waterType] ?? p.waterType],
         ['PACKAGE', p.package.name],
       ];
-      ensure(36);
-      const top = y;
-      specs.forEach(([label, value], i) => {
-        const x = L + colW * i;
+      for (const [label, value] of specs) {
         doc
           .font(SANS_BOLD)
           .fontSize(7.5)
           .fillColor(SLATE_400)
-          .text(label, x, top, { width: colW - 10, characterSpacing: 1.2 });
+          .text(label, L, y, { width: textW, characterSpacing: 1.2 });
         doc
           .font(SANS_BOLD)
           .fontSize(11)
           .fillColor(INK)
-          .text(value, x, doc.y + 1, { width: colW - 10 });
-      });
-      y = doc.y + 0.3 * CM;
+          .text(value, L, doc.y + 1, { width: textW });
+        y = doc.y + 0.22 * CM;
+      }
     }
 
     const sublabel = (text: string): void => {
@@ -395,31 +431,71 @@ export class ProposalPdfService {
 
     if (p.package.inclusions?.length) {
       sublabel("WHAT'S INCLUDED");
-      // Two balanced columns, mirroring `columns: 2` in the print CSS.
-      const half = Math.ceil(p.package.inclusions.length / 2);
-      const cols = [p.package.inclusions.slice(0, half), p.package.inclusions.slice(half)];
-      const colW = (CW - 1 * CM) / 2;
-      const top = y;
-      let lowest = y;
-      cols.forEach((items, ci) => {
-        if (!items.length) return;
-        const x = L + ci * (colW + 1 * CM);
-        let cy = top;
-        for (const item of items) {
+      // One column: the text area is narrower now that the image sits beside it.
+      {
+        const colW = textW;
+        let cy = y;
+        for (const item of p.package.inclusions) {
           doc.font(SANS).fontSize(9.5).fillColor(SLATE_700);
           const h = doc.heightOfString(item, { width: colW - 14 });
-          doc.circle(x + 2.5, cy + 5.5, 2).fillColor(SLATE_300).fill();
-          doc.fillColor(SLATE_700).text(item, x + 14, cy, { width: colW - 14 });
+          doc.circle(L + 2.5, cy + 5.5, 2).fillColor(SLATE_300).fill();
+          doc.fillColor(SLATE_700).text(item, L + 14, cy, { width: colW - 14 });
           cy += h + 3;
         }
-        lowest = Math.max(lowest, cy);
-      });
-      y = lowest + 0.2 * CM;
+        y = cy + 0.2 * CM;
+      }
+    }
+
+    // The image sits in its own column, so the next section must clear whichever
+    // column ran longer — otherwise a tall image overlaps the upgrades list.
+    if (imgDrawnH > 0) {
+      y = Math.max(y, systemTop + imgDrawnH + 0.3 * CM);
     }
 
     if (p.adders?.length) {
       sublabel('SELECTED UPGRADES');
-      for (const a of p.adders) line(a.name, money(a.price));
+
+      // Fetch every thumbnail up front so one slow URL doesn't serialise the
+      // whole list. Failures resolve to null and the line renders text-only.
+      const thumbs = await Promise.all(
+        p.adders.map((a) => this.fetchImage(this.absolute(a.imageUrl))),
+      );
+
+      const THUMB = 1 * CM;
+      // Every row is the same height whether or not it has a thumbnail —
+      // mixing line() with the taller image rows made the list look ragged.
+      p.adders.forEach((a, i) => {
+        const thumb = thumbs[i];
+        const rowH = THUMB + 6;
+        ensure(rowH + 6);
+        const top = y;
+        if (thumb) {
+          try {
+            doc.image(thumb, L, top + 3, { fit: [THUMB, THUMB] });
+          } catch {
+            /* undecodable — the text still renders */
+          }
+        }
+        // Indent every name equally so the column aligns with or without an image.
+        const textX = L + THUMB + 0.25 * CM;
+        doc
+          .font(SANS)
+          .fontSize(9.5)
+          .fillColor(SLATE_700)
+          .text(a.name, textX, top + THUMB / 2 - 5, {
+            width: CW * 0.62 - THUMB,
+            lineBreak: false,
+          });
+        doc.text(money(a.price), L, top + THUMB / 2 - 5, {
+          width: CW,
+          align: 'right',
+          lineBreak: false,
+        });
+        y = top + rowH;
+        doc.moveTo(L, y).lineTo(R, y).lineWidth(0.75).strokeColor(HAIRLINE).stroke();
+        y += 4;
+      });
+
       y += 0.15 * CM;
     }
 

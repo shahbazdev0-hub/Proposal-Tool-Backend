@@ -9,6 +9,10 @@ export class CreateAdderDto {
   price: number;
 
   @IsOptional()
+  @IsString()
+  imageUrl?: string | null;
+
+  @IsOptional()
   @IsArray()
   @IsMongoId({ each: true })
   applicablePackageIds?: string[];
