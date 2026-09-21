@@ -25,6 +25,13 @@ export class ConfigOption {
   /** Default ceiling for packages of this product. null = no product default. */
   @Prop({ type: Number, default: null, min: 0 })
   maxMargin: number | null;
+
+  /**
+   * Product image shown on every proposal for this product (product_type only).
+   * An uploaded path (/uploads/<file>) or an external URL.
+   */
+  @Prop({ type: String, trim: true, default: null })
+  imageUrl: string | null;
 }
 
 export const ConfigOptionSchema = SchemaFactory.createForClass(ConfigOption);
