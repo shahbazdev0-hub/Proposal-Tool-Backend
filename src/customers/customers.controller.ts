@@ -13,6 +13,7 @@ import {
 import { CustomersService } from './customers.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
+import { TransferCustomerDto } from './dto/transfer-customer.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/interfaces/authenticated-user.interface';
@@ -23,7 +24,10 @@ export class CustomersController {
   constructor(private readonly customersService: CustomersService) {}
 
   @Post()
-  create(@Body() dto: CreateCustomerDto, @CurrentUser() user: AuthenticatedUser) {
+  create(
+    @Body() dto: CreateCustomerDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
     return this.customersService.create(dto, user.userId);
   }
 
@@ -33,13 +37,23 @@ export class CustomersController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.customersService.findById(id);
+  findOne(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.customersService.findByIdForUser(id, user.userId, user.role);
   }
 
   @Patch(':id')
   update(@Param('id') id: string, @Body() dto: UpdateCustomerDto) {
     return this.customersService.update(id, dto);
+  }
+
+  /** Admin-only ownership transfer — see CustomersService.transfer. */
+  @Patch(':id/transfer')
+  transfer(
+    @Param('id') id: string,
+    @Body() dto: TransferCustomerDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.customersService.transfer(id, dto, user.role);
   }
 
   @Delete(':id')

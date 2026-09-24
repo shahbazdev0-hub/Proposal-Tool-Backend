@@ -30,8 +30,16 @@ export interface CommissionBreakdown {
   nickOverride: number;
 }
 
-export function calculateCommission(input: CommissionInput): CommissionBreakdown {
-  const { waterType, package: pkg, loanAmount, dealerFeePercent, addersTotal } = input;
+export function calculateCommission(
+  input: CommissionInput,
+): CommissionBreakdown {
+  const {
+    waterType,
+    package: pkg,
+    loanAmount,
+    dealerFeePercent,
+    addersTotal,
+  } = input;
 
   if (waterType === WaterType.HOMEWATER) {
     // Flat pricing — no loan-amount math at all. Only Direct Recruiter gets an override.
@@ -48,7 +56,7 @@ export function calculateCommission(input: CommissionInput): CommissionBreakdown
   if (waterType === 'h2pros') {
     // 10% of loan amount minus $285, plus 20% of adders (upgrades).
     // Upline overrides and Nick's override follow the Supreme package structure.
-    const salesRep = loanAmount * 0.10 - 285 + addersTotal * 0.20;
+    const salesRep = loanAmount * 0.1 - 285 + addersTotal * 0.2;
     return {
       salesRep,
       directRecruiter: pkg.overrides.directRecruiter,

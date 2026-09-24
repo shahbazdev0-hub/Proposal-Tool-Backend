@@ -1,7 +1,6 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
-import { Types } from 'mongoose';
 import { UsersService } from '../users/users.service';
 import { UserDocument } from '../users/schemas/user.schema';
 
@@ -14,7 +13,10 @@ export class AuthService {
 
   async validateUser(email: string, password: string): Promise<UserDocument> {
     const user = await this.usersService.findByEmailWithPassword(email);
-    if (!user || !user.isActive) {
+    // No password set yet means an invited user hasn't finished setup via
+    // their emailed link — bcrypt.compare throws on a null hash rather than
+    // returning false, so this must be checked explicitly.
+    if (!user || !user.isActive || !user.passwordHash) {
       throw new UnauthorizedException('Invalid credentials');
     }
 
@@ -28,7 +30,7 @@ export class AuthService {
 
   async login(email: string, password: string) {
     const user = await this.validateUser(email, password);
-    const userId = (user._id as Types.ObjectId).toString();
+    const userId = user._id.toString();
 
     const payload = { sub: userId, email: user.email, role: user.role };
 

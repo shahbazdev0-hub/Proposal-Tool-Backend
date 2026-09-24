@@ -9,15 +9,19 @@ import { AddersModule } from '../adders/adders.module';
 import { FinanciersModule } from '../financiers/financiers.module';
 import { SettingsModule } from '../settings/settings.module';
 import { EmailModule } from '../email/email.module';
+import { UsersModule } from '../users/users.module';
 
 @Module({
   imports: [
-    MongooseModule.forFeature([{ name: Proposal.name, schema: ProposalSchema }]),
+    MongooseModule.forFeature([
+      { name: Proposal.name, schema: ProposalSchema },
+    ]),
     PackagesModule,
     AddersModule,
     FinanciersModule,
     SettingsModule,
     EmailModule,
+    UsersModule,
   ],
   controllers: [ProposalsController],
   providers: [ProposalsService, ProposalPdfService],

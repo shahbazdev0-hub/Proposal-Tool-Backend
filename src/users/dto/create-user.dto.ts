@@ -1,4 +1,12 @@
-import { IsArray, IsEmail, IsEnum, IsMongoId, IsOptional, IsString, MinLength } from 'class-validator';
+import {
+  IsArray,
+  IsEmail,
+  IsEnum,
+  IsMongoId,
+  IsOptional,
+  IsString,
+  MinLength,
+} from 'class-validator';
 import { Role } from '../../common/enums/role.enum';
 
 export class CreateUserDto {
@@ -16,9 +24,13 @@ export class CreateUserDto {
   @IsString()
   office?: string;
 
+  // Optional: leave blank to invite the user by email instead — they'll set
+  // their own password via a link. Provided only for the rare case an admin
+  // wants to set one directly without sending an invite.
+  @IsOptional()
   @IsString()
   @MinLength(8)
-  password: string;
+  password?: string;
 
   @IsEnum(Role)
   role: Role;

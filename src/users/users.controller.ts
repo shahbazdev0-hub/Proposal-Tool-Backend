@@ -4,6 +4,8 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   Patch,
   Post,
@@ -19,11 +21,15 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Role } from '../common/enums/role.enum';
 import type { AuthenticatedUser } from '../auth/interfaces/authenticated-user.interface';
+import { EmailService } from '../email/email.service';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly emailService: EmailService,
+  ) {}
 
   @Get('me')
   getMe(@CurrentUser() user: AuthenticatedUser) {
@@ -37,8 +43,16 @@ export class UsersController {
 
   @Roles(Role.ADMIN)
   @Post()
-  create(@Body() dto: CreateUserDto) {
-    return this.usersService.create(dto);
+  async create(@Body() dto: CreateUserDto) {
+    const { user, inviteToken } = await this.usersService.create(dto);
+    if (inviteToken) {
+      await this.emailService.sendPasswordSetLink(user.email, {
+        name: user.name,
+        token: inviteToken,
+        isNewAccount: true,
+      });
+    }
+    return user;
   }
 
   @Roles(Role.ADMIN, Role.OPS)
@@ -63,5 +77,14 @@ export class UsersController {
   @Delete(':id')
   deactivate(@Param('id') id: string) {
     return this.usersService.deactivate(id);
+  }
+
+  /** Permanent delete — a distinct route from the plain DELETE above, which
+   *  only deactivates. Refused by the service if the user has any history. */
+  @Roles(Role.ADMIN)
+  @Delete(':id/permanent')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  remove(@Param('id') id: string) {
+    return this.usersService.remove(id);
   }
 }

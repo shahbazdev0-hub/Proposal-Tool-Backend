@@ -1,4 +1,11 @@
-import { IsArray, IsMongoId, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import {
+  IsArray,
+  IsMongoId,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Min,
+} from 'class-validator';
 
 export class CreateAdderDto {
   @IsString()

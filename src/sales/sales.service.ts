@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Sale, SaleDocument } from './schemas/sale.schema';
@@ -30,7 +34,9 @@ export class SalesService {
       );
     }
 
-    const adders = dto.adders?.length ? await this.addersService.findByIds(dto.adders) : [];
+    const adders = dto.adders?.length
+      ? await this.addersService.findByIds(dto.adders)
+      : [];
     const addersTotal = adders.reduce((sum, adder) => sum + adder.price, 0);
 
     let dealerFeePercent = 0;
@@ -41,7 +47,9 @@ export class SalesService {
         (lo) => lo._id?.toString() === dto.loanOptionId,
       );
       if (!loanOption) {
-        throw new NotFoundException('Loan option not found for the selected financier');
+        throw new NotFoundException(
+          'Loan option not found for the selected financier',
+        );
       }
       dealerFeePercent = loanOption.dealerFeePercent;
       loanOptionLabel = loanOption.label;
@@ -97,7 +105,11 @@ export class SalesService {
   // e.g. a Team Lead only sees deals where they are the snapshotted teamLead.
   findAll(
     query: SalesQueryDto,
-    restrict?: { field: 'salesRep' | 'directRecruiter' | 'teamLead' | 'regional' | 'partner'; userId: string },
+    restrict?: {
+      field:
+        'salesRep' | 'directRecruiter' | 'teamLead' | 'regional' | 'partner';
+      userId: string;
+    },
   ): Promise<SaleDocument[]> {
     const filter: Record<string, unknown> = {};
 
@@ -118,7 +130,16 @@ export class SalesService {
 
     return this.saleModel
       .find(filter)
-      .populate(['package', 'adders', 'financier', 'salesRep', 'directRecruiter', 'teamLead', 'regional', 'partner'])
+      .populate([
+        'package',
+        'adders',
+        'financier',
+        'salesRep',
+        'directRecruiter',
+        'teamLead',
+        'regional',
+        'partner',
+      ])
       .sort({ saleDate: -1 })
       .exec();
   }
@@ -126,7 +147,16 @@ export class SalesService {
   async findById(id: string): Promise<SaleDocument> {
     const sale = await this.saleModel
       .findById(id)
-      .populate(['package', 'adders', 'financier', 'salesRep', 'directRecruiter', 'teamLead', 'regional', 'partner'])
+      .populate([
+        'package',
+        'adders',
+        'financier',
+        'salesRep',
+        'directRecruiter',
+        'teamLead',
+        'regional',
+        'partner',
+      ])
       .exec();
     if (!sale) {
       throw new NotFoundException('Sale not found');
@@ -148,10 +178,13 @@ export class SalesService {
     }
 
     const adderIds = dto.adders ?? (existing.adders as unknown as string[]);
-    const adders = adderIds?.length ? await this.addersService.findByIds(adderIds) : [];
+    const adders = adderIds?.length
+      ? await this.addersService.findByIds(adderIds)
+      : [];
     const addersTotal = adders.reduce((sum, a) => sum + a.price, 0);
 
-    const financierId = 'financier' in dto ? dto.financier : existing.financier?.toString();
+    const financierId =
+      'financier' in dto ? dto.financier : existing.financier?.toString();
     let dealerFeePercent = existing.dealerFeePercent;
     let loanOptionLabel = existing.loanOptionLabel;
 
@@ -162,7 +195,9 @@ export class SalesService {
         (lo) => lo._id?.toString() === (dto.loanOptionId ?? loanOptionId),
       );
       if (dto.loanOptionId && !loanOption) {
-        throw new NotFoundException('Loan option not found for the selected financier');
+        throw new NotFoundException(
+          'Loan option not found for the selected financier',
+        );
       }
       if (loanOption) {
         dealerFeePercent = loanOption.dealerFeePercent;
@@ -200,9 +235,15 @@ export class SalesService {
         id,
         {
           customerName: dto.customerName ?? existing.customerName,
-          customerEmail: dto.customerEmail !== undefined ? dto.customerEmail : existing.customerEmail,
+          customerEmail:
+            dto.customerEmail !== undefined
+              ? dto.customerEmail
+              : existing.customerEmail,
           saleDate: dto.saleDate ?? existing.saleDate,
-          installDate: dto.installDate !== undefined ? dto.installDate : existing.installDate,
+          installDate:
+            dto.installDate !== undefined
+              ? dto.installDate
+              : existing.installDate,
           financier: financierId ? new Types.ObjectId(financierId) : null,
           loanOptionLabel,
           dealerFeePercent,
@@ -220,7 +261,16 @@ export class SalesService {
         },
         { new: true },
       )
-      .populate(['package', 'adders', 'financier', 'salesRep', 'directRecruiter', 'teamLead', 'regional', 'partner'])
+      .populate([
+        'package',
+        'adders',
+        'financier',
+        'salesRep',
+        'directRecruiter',
+        'teamLead',
+        'regional',
+        'partner',
+      ])
       .exec();
 
     if (!updated) throw new NotFoundException('Sale not found');
@@ -232,7 +282,10 @@ export class SalesService {
     if (!result) throw new NotFoundException('Sale not found');
   }
 
-  async markInstalled(id: string, status: 'not_installed' | 'installed'): Promise<SaleDocument> {
+  async markInstalled(
+    id: string,
+    status: 'not_installed' | 'installed',
+  ): Promise<SaleDocument> {
     const sale = await this.saleModel
       .findByIdAndUpdate(id, { installStatus: status }, { new: true })
       .exec();
@@ -242,7 +295,11 @@ export class SalesService {
 
   async markPaid(id: string, paid: boolean): Promise<SaleDocument> {
     const sale = await this.saleModel
-      .findByIdAndUpdate(id, { commissionsPaid: paid, paidDate: paid ? new Date() : null }, { new: true })
+      .findByIdAndUpdate(
+        id,
+        { commissionsPaid: paid, paidDate: paid ? new Date() : null },
+        { new: true },
+      )
       .exec();
     if (!sale) {
       throw new NotFoundException('Sale not found');
@@ -251,7 +308,10 @@ export class SalesService {
   }
 
   // Nick's override must never reach a non-admin client — strip it at the edge.
-  static sanitizeForRole(sale: SaleDocument, role: Role): Record<string, unknown> {
+  static sanitizeForRole(
+    sale: SaleDocument,
+    role: Role,
+  ): Record<string, unknown> {
     const plain = sale.toJSON() as Record<string, unknown> & {
       commissions: Record<string, unknown>;
     };

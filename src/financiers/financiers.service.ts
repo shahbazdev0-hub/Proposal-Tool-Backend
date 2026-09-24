@@ -1,4 +1,8 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Financier, FinancierDocument } from './schemas/financier.schema';
@@ -9,7 +13,8 @@ import { LoanOptionDto } from './dto/loan-option.dto';
 @Injectable()
 export class FinanciersService {
   constructor(
-    @InjectModel(Financier.name) private readonly financierModel: Model<FinancierDocument>,
+    @InjectModel(Financier.name)
+    private readonly financierModel: Model<FinancierDocument>,
   ) {}
 
   create(dto: CreateFinancierDto): Promise<FinancierDocument> {
@@ -28,8 +33,13 @@ export class FinanciersService {
     return financier;
   }
 
-  async update(id: string, dto: UpdateFinancierDto): Promise<FinancierDocument> {
-    const financier = await this.financierModel.findByIdAndUpdate(id, dto, { new: true }).exec();
+  async update(
+    id: string,
+    dto: UpdateFinancierDto,
+  ): Promise<FinancierDocument> {
+    const financier = await this.financierModel
+      .findByIdAndUpdate(id, dto, { new: true })
+      .exec();
     if (!financier) {
       throw new NotFoundException('Financier not found');
     }
@@ -66,7 +76,10 @@ export class FinanciersService {
     }
   }
 
-  async addLoanOption(id: string, dto: LoanOptionDto): Promise<FinancierDocument> {
+  async addLoanOption(
+    id: string,
+    dto: LoanOptionDto,
+  ): Promise<FinancierDocument> {
     const financier = await this.findById(id);
     FinanciersService.assertLabelIsFree(financier, dto.label);
     financier.loanOptions.push({
@@ -86,7 +99,9 @@ export class FinanciersService {
     dto: LoanOptionDto,
   ): Promise<FinancierDocument> {
     const financier = await this.findById(id);
-    const loanOption = financier.loanOptions.find((lo) => lo._id?.toString() === loanOptionId);
+    const loanOption = financier.loanOptions.find(
+      (lo) => lo._id?.toString() === loanOptionId,
+    );
     if (!loanOption) {
       throw new NotFoundException('Loan option not found');
     }
@@ -101,11 +116,14 @@ export class FinanciersService {
     return financier.save();
   }
 
-  async removeLoanOption(id: string, loanOptionId: string): Promise<FinancierDocument> {
+  async removeLoanOption(
+    id: string,
+    loanOptionId: string,
+  ): Promise<FinancierDocument> {
     const financier = await this.findById(id);
     financier.loanOptions = financier.loanOptions.filter(
       (lo) => lo._id?.toString() !== loanOptionId,
-    ) as typeof financier.loanOptions;
+    );
     return financier.save();
   }
 }

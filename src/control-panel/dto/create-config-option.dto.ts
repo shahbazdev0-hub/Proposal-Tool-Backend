@@ -1,4 +1,11 @@
-import { IsString, IsNotEmpty, IsOptional, IsBoolean, IsNumber, Min } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsBoolean,
+  IsNumber,
+  Min,
+} from 'class-validator';
 
 export class CreateConfigOptionDto {
   /** Product-level margin policy; only used when category is 'product_type'. */
@@ -16,7 +23,6 @@ export class CreateConfigOptionDto {
   @IsOptional()
   @IsString()
   imageUrl?: string | null;
-
 
   @IsString()
   @IsNotEmpty()

@@ -1,4 +1,11 @@
-import { Controller, Get, Header, Query, StreamableFile, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Header,
+  Query,
+  StreamableFile,
+  UseGuards,
+} from '@nestjs/common';
 import { PayrollService } from './payroll.service';
 import { SalesQueryDto } from '../sales/dto/sales-query.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -26,7 +33,10 @@ export class PayrollController {
   }
 
   @Get('export.xlsx')
-  @Header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+  @Header(
+    'Content-Type',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  )
   @Header('Content-Disposition', 'attachment; filename="payroll.xlsx"')
   async exportExcel(@Query() query: SalesQueryDto): Promise<StreamableFile> {
     const buffer = await this.payrollService.exportExcel(query);

@@ -35,10 +35,19 @@ export class EmailService {
     },
   ): Promise<void> {
     const fmt = (n: number) =>
-      new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
+      new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+      }).format(n);
 
     const fmtDate = (d: string | null) =>
-      d ? new Date(d).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' }) : '—';
+      d
+        ? new Date(d).toLocaleDateString('en-US', {
+            month: 'numeric',
+            day: 'numeric',
+            year: '2-digit',
+          })
+        : '—';
 
     // Compute payroll week (Mon–Sun) containing the sale date
     const saleD = payload.saleDate ? new Date(payload.saleDate) : new Date();
@@ -84,12 +93,12 @@ export class EmailService {
     <!-- Detail table -->
     <table style="width:100%;border-collapse:collapse">
       <tbody>
-        ${row('Sales Rep',    payload.salesRepName)}
-        ${row('Customer',     payload.customerName)}
+        ${row('Sales Rep', payload.salesRepName)}
+        ${row('Customer', payload.customerName)}
         ${row('Install Date', fmtDate(payload.installDate))}
-        ${row('Package',      payload.packageName)}
-        ${row('Financier',    payload.financierName ?? 'Cash')}
-        ${row('Commission',   fmt(payload.commissionAmount), true)}
+        ${row('Package', payload.packageName)}
+        ${row('Financier', payload.financierName ?? 'Cash')}
+        ${row('Commission', fmt(payload.commissionAmount), true)}
       </tbody>
     </table>
 
@@ -144,7 +153,10 @@ export class EmailService {
     },
   ): Promise<void> {
     const fmt = (n: number) =>
-      new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
+      new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+      }).format(n);
 
     const accent = payload.primaryColor || '#1e293b';
 
@@ -200,12 +212,83 @@ export class EmailService {
         subject: `Your proposal from ${payload.companyName}`,
         html,
         attachments: [
-          { filename: 'proposal.pdf', content: payload.pdf, contentType: 'application/pdf' },
+          {
+            filename: 'proposal.pdf',
+            content: payload.pdf,
+            contentType: 'application/pdf',
+          },
         ],
       });
     } catch (err) {
       throw new InternalServerErrorException(
         `Failed to send proposal email: ${(err as Error).message}`,
+      );
+    }
+  }
+
+  /**
+   * Invite ("set your password") email — sent when a new user is created
+   * with no password, and reused for a future forgot-password link. Both
+   * cases hit the same public set-password page with the same kind of
+   * one-time token, just different subject/copy.
+   */
+  async sendPasswordSetLink(
+    to: string,
+    payload: { name: string; token: string; isNewAccount: boolean },
+  ): Promise<void> {
+    const frontendOrigin = this.configService.get<string>('corsOrigin');
+    const link = `${frontendOrigin}/set-password?token=${payload.token}`;
+
+    const subject = payload.isNewAccount
+      ? 'Set up your Proposal Tool account'
+      : 'Reset your Proposal Tool password';
+
+    const intro = payload.isNewAccount
+      ? `An account has been created for you on Proposal Tool. Click below to set your password and log in.`
+      : `We received a request to reset your Proposal Tool password. Click below to choose a new one.`;
+
+    const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width,initial-scale=1" /></head>
+<body style="margin:0;padding:24px;background:#f8fafc;font-family:Arial,Helvetica,sans-serif">
+  <div style="max-width:480px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:6px;overflow:hidden">
+    <div style="padding:20px 32px;background:#0f172a">
+      <span style="font-size:18px;font-weight:700;color:#fff">Proposal Tool</span>
+    </div>
+    <div style="padding:28px 32px">
+      <p style="margin:0 0 16px;font-size:15px;color:#0f172a">Hi ${payload.name},</p>
+      <p style="margin:0 0 24px;font-size:14px;color:#475569;line-height:1.6">${intro}</p>
+      <a href="${link}"
+         style="display:inline-block;padding:12px 24px;background:#0f172a;color:#fff;
+                text-decoration:none;border-radius:6px;font-size:14px;font-weight:600">
+        ${payload.isNewAccount ? 'Set your password' : 'Reset your password'}
+      </a>
+      <p style="margin:24px 0 0;font-size:12px;color:#94a3b8;line-height:1.6">
+        This link expires in 24 hours. If the button doesn't work, copy and paste this
+        URL into your browser:<br />${link}
+      </p>
+    </div>
+    <div style="padding:16px 32px;border-top:1px solid #e2e8f0;text-align:center">
+      <p style="margin:0;font-size:11px;color:#94a3b8">
+        If you weren't expecting this email, you can safely ignore it.
+      </p>
+    </div>
+  </div>
+</body>
+</html>
+    `;
+
+    try {
+      await this.transporter.sendMail({
+        from: `"Proposal Tool" <${this.configService.get<string>('email.user')}>`,
+        to,
+        subject,
+        html,
+      });
+    } catch (err) {
+      throw new InternalServerErrorException(
+        `Failed to send invite email: ${(err as Error).message}`,
       );
     }
   }
