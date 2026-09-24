@@ -1,4 +1,16 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { PackagesService } from './packages.service';
 import { CreatePackageDto } from './dto/create-package.dto';
 import { UpdatePackageDto } from './dto/update-package.dto';
@@ -29,7 +41,10 @@ export class PackagesController {
   }
 
   @Get(':id')
-  async findOne(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
+  async findOne(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+  ) {
     await this.packagesService.assertUserMayUse(user.userId, user.role, id);
     const pkg = await this.packagesService.findById(id);
     return this.packagesService.presentOne(pkg, user.role);
@@ -39,7 +54,10 @@ export class PackagesController {
   // package without its resolved margin policy.
   @Roles(Role.ADMIN)
   @Post()
-  async create(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreatePackageDto) {
+  async create(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: CreatePackageDto,
+  ) {
     const pkg = await this.packagesService.create(dto);
     return this.packagesService.presentOne(pkg, user.role);
   }

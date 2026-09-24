@@ -1,7 +1,14 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { ConfigOption, ConfigOptionDocument } from './schemas/config-option.schema';
+import {
+  ConfigOption,
+  ConfigOptionDocument,
+} from './schemas/config-option.schema';
 import { CreateConfigOptionDto } from './dto/create-config-option.dto';
 import { UpdateConfigOptionDto } from './dto/update-config-option.dto';
 
@@ -13,10 +20,7 @@ export class ControlPanelService {
   ) {}
 
   findByCategory(category: string): Promise<ConfigOptionDocument[]> {
-    return this.optionModel
-      .find({ category })
-      .sort({ label: 1 })
-      .exec();
+    return this.optionModel.find({ category }).sort({ label: 1 }).exec();
   }
 
   findAll(): Promise<ConfigOptionDocument[]> {
@@ -36,7 +40,10 @@ export class ControlPanelService {
     }
   }
 
-  async update(id: string, dto: UpdateConfigOptionDto): Promise<ConfigOptionDocument> {
+  async update(
+    id: string,
+    dto: UpdateConfigOptionDto,
+  ): Promise<ConfigOptionDocument> {
     const option = await this.optionModel
       .findByIdAndUpdate(id, dto, { new: true })
       .exec();

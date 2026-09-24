@@ -15,7 +15,8 @@ export class PackageOverrides {
   partner: number;
 }
 
-export const PackageOverridesSchema = SchemaFactory.createForClass(PackageOverrides);
+export const PackageOverridesSchema =
+  SchemaFactory.createForClass(PackageOverrides);
 
 export type PackageDocument = Package & Document;
 

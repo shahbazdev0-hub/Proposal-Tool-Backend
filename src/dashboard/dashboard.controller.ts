@@ -21,12 +21,22 @@ export class DashboardController {
   constructor(private readonly dashboardService: DashboardService) {}
 
   @Get()
-  getStats(@CurrentUser() user: AuthenticatedUser, @Query() query: SalesQueryDto) {
+  getStats(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: SalesQueryDto,
+  ) {
     if (user.role === Role.ADMIN || user.role === Role.OPS) {
-      return this.dashboardService.getAdminStats(query, user.role === Role.ADMIN);
+      return this.dashboardService.getAdminStats(
+        query,
+        user.role === Role.ADMIN,
+      );
     }
 
     const scopeField = ROLE_SCOPE_FIELD[user.role];
-    return this.dashboardService.getPersonalStats(query, scopeField as ScopeField, user.userId);
+    return this.dashboardService.getPersonalStats(
+      query,
+      scopeField as ScopeField,
+      user.userId,
+    );
   }
 }

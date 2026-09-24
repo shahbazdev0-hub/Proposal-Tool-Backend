@@ -42,14 +42,20 @@ export class UploadsController {
         filename: (_req, file, cb) => {
           // Random name: the original could collide, contain path separators,
           // or carry a misleading double extension.
-          const ext = extname(file.originalname).toLowerCase() === '.png' ? '.png' : '.jpg';
+          const ext =
+            extname(file.originalname).toLowerCase() === '.png'
+              ? '.png'
+              : '.jpg';
           cb(null, `${Date.now()}-${randomBytes(6).toString('hex')}${ext}`);
         },
       }),
       limits: { fileSize: MAX_BYTES },
       fileFilter: (_req, file, cb) => {
         if (!ALLOWED_MIME.includes(file.mimetype)) {
-          cb(new BadRequestException('Only PNG and JPEG images are supported.'), false);
+          cb(
+            new BadRequestException('Only PNG and JPEG images are supported.'),
+            false,
+          );
           return;
         }
         cb(null, true);

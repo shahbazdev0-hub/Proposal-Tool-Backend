@@ -2,10 +2,14 @@ import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Sale, SaleDocument } from '../sales/schemas/sale.schema';
-import { Proposal, ProposalDocument } from '../proposals/schemas/proposal.schema';
+import {
+  Proposal,
+  ProposalDocument,
+} from '../proposals/schemas/proposal.schema';
 import { SalesQueryDto } from '../sales/dto/sales-query.dto';
 
-export type ScopeField = 'salesRep' | 'directRecruiter' | 'teamLead' | 'regional' | 'partner';
+export type ScopeField =
+  'salesRep' | 'directRecruiter' | 'teamLead' | 'regional' | 'partner';
 
 // Fixed order so the status chart keeps a stable, meaningful sequence rather
 // than whatever order the aggregation happens to return.
@@ -22,7 +26,8 @@ const STATUS_ORDER = [
 export class DashboardService {
   constructor(
     @InjectModel(Sale.name) private readonly saleModel: Model<SaleDocument>,
-    @InjectModel(Proposal.name) private readonly proposalModel: Model<ProposalDocument>,
+    @InjectModel(Proposal.name)
+    private readonly proposalModel: Model<ProposalDocument>,
   ) {}
 
   private buildDateFilter(query: SalesQueryDto): Record<string, unknown> {
@@ -38,7 +43,9 @@ export class DashboardService {
 
   // Sales are dated by saleDate; proposals only have createdAt, so the same
   // range has to be applied to a different field.
-  private buildProposalDateFilter(query: SalesQueryDto): Record<string, unknown> {
+  private buildProposalDateFilter(
+    query: SalesQueryDto,
+  ): Record<string, unknown> {
     const filter: Record<string, unknown> = {};
     if (query.from || query.to) {
       const createdAt: Record<string, Date> = {};
@@ -56,7 +63,13 @@ export class DashboardService {
       value: number;
     }>([
       { $match: filter },
-      { $group: { _id: '$status', count: { $sum: 1 }, value: { $sum: '$cashPrice' } } },
+      {
+        $group: {
+          _id: '$status',
+          count: { $sum: 1 },
+          value: { $sum: '$cashPrice' },
+        },
+      },
       { $project: { _id: 0, status: '$_id', count: 1, value: 1 } },
     ]);
 
@@ -70,11 +83,17 @@ export class DashboardService {
     // Open pipeline = still winnable: drafted, sent or approved but not yet a
     // sale. Closed and cancelled are out; converted has already become revenue.
     const openValue = rows
-      .filter((r) => r.status === 'draft' || r.status === 'sent' || r.status === 'approved')
+      .filter(
+        (r) =>
+          r.status === 'draft' ||
+          r.status === 'sent' ||
+          r.status === 'approved',
+      )
       .reduce((sum, r) => sum + r.value, 0);
 
     const proposalsByStatus = STATUS_ORDER.map(
-      (status) => rows.find((r) => r.status === status) ?? { status, count: 0, value: 0 },
+      (status) =>
+        rows.find((r) => r.status === status) ?? { status, count: 0, value: 0 },
     ).filter((r) => r.count > 0);
 
     return {
@@ -125,8 +144,21 @@ export class DashboardService {
 
     const salesByProduct = await this.saleModel.aggregate([
       { $match: filter },
-      { $group: { _id: '$package', count: { $sum: 1 }, revenue: { $sum: '$loanAmount' } } },
-      { $lookup: { from: 'packages', localField: '_id', foreignField: '_id', as: 'package' } },
+      {
+        $group: {
+          _id: '$package',
+          count: { $sum: 1 },
+          revenue: { $sum: '$loanAmount' },
+        },
+      },
+      {
+        $lookup: {
+          from: 'packages',
+          localField: '_id',
+          foreignField: '_id',
+          as: 'package',
+        },
+      },
       { $unwind: '$package' },
       {
         $project: {
@@ -150,9 +182,24 @@ export class DashboardService {
           commission: { $sum: '$commissions.salesRep' },
         },
       },
-      { $lookup: { from: 'users', localField: '_id', foreignField: '_id', as: 'rep' } },
+      {
+        $lookup: {
+          from: 'users',
+          localField: '_id',
+          foreignField: '_id',
+          as: 'rep',
+        },
+      },
       { $unwind: '$rep' },
-      { $project: { _id: 0, name: '$rep.name', count: 1, revenue: 1, commission: 1 } },
+      {
+        $project: {
+          _id: 0,
+          name: '$rep.name',
+          count: 1,
+          revenue: 1,
+          commission: 1,
+        },
+      },
       { $sort: { revenue: -1 } },
     ]);
 
@@ -171,8 +218,15 @@ export class DashboardService {
     };
   }
 
-  async getPersonalStats(query: SalesQueryDto, field: ScopeField, userId: string) {
-    const filter = { ...this.buildDateFilter(query), [field]: new Types.ObjectId(userId) };
+  async getPersonalStats(
+    query: SalesQueryDto,
+    field: ScopeField,
+    userId: string,
+  ) {
+    const filter = {
+      ...this.buildDateFilter(query),
+      [field]: new Types.ObjectId(userId),
+    };
 
     const [totals] = await this.saleModel.aggregate([
       { $match: filter },

@@ -18,8 +18,11 @@ export class User {
   @Prop({ trim: true })
   office?: string;
 
-  @Prop({ required: true, select: false })
-  passwordHash: string;
+  // Not required at the schema level: a freshly invited user has no password
+  // yet — they set one via the emailed invite link. The login flow rejects
+  // anyone with no hash set (see AuthService), so this never grants access.
+  @Prop({ type: String, select: false, default: null })
+  passwordHash: string | null;
 
   @Prop({ required: true, enum: Role })
   role: Role;
@@ -48,6 +51,16 @@ export class User {
 
   @Prop({ type: Types.ObjectId, ref: User.name, default: null })
   partner?: Types.ObjectId | null;
+
+  // Set-password token — used both for the initial invite (sent on create,
+  // when no password was given) and for a future "forgot password" flow.
+  // The raw token is only ever in the emailed link; this stores its SHA-256
+  // hash, so a database read alone can't be used to set someone's password.
+  @Prop({ type: String, select: false, default: null })
+  passwordSetTokenHash?: string | null;
+
+  @Prop({ type: Date, select: false, default: null })
+  passwordSetTokenExpires?: Date | null;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

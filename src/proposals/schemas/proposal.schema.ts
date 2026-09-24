@@ -4,12 +4,7 @@ import { Document, Types } from 'mongoose';
 export type ProposalDocument = Proposal & Document;
 
 export type ProposalStatus =
-  | 'draft'
-  | 'sent'
-  | 'approved'
-  | 'closed'
-  | 'cancel'
-  | 'converted';
+  'draft' | 'sent' | 'approved' | 'closed' | 'cancel' | 'converted';
 
 /** Single source of truth for the allowed values, shared with the DTO. */
 export const PROPOSAL_STATUSES: ProposalStatus[] = [

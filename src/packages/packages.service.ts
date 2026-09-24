@@ -1,4 +1,8 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { UsersService } from '../users/users.service';
@@ -26,7 +30,8 @@ const PRODUCT_TYPE_CATEGORY = 'product_type';
 @Injectable()
 export class PackagesService {
   constructor(
-    @InjectModel(Package.name) private readonly packageModel: Model<PackageDocument>,
+    @InjectModel(Package.name)
+    private readonly packageModel: Model<PackageDocument>,
     private readonly usersService: UsersService,
     private readonly controlPanelService: ControlPanelService,
   ) {}
@@ -51,7 +56,8 @@ export class PackagesService {
     pkg: Pick<Package, 'marginEnabled' | 'maxMargin'>,
     product: Pick<ConfigOption, 'marginEnabled' | 'maxMargin'> | null,
   ): MarginPolicy {
-    const enabled = (product?.marginEnabled ?? true) && (pkg.marginEnabled ?? true);
+    const enabled =
+      (product?.marginEnabled ?? true) && (pkg.marginEnabled ?? true);
     if (!enabled) return { enabled: false, cap: 0, source: 'none' };
     if (pkg.maxMargin != null) {
       return { enabled: true, cap: pkg.maxMargin, source: 'package' };
@@ -64,7 +70,9 @@ export class PackagesService {
 
   /** Policy for a single package, resolving its product on the way. */
   async getMarginPolicy(pkg: PackageDocument): Promise<MarginPolicy> {
-    const options = await this.controlPanelService.findByCategory(PRODUCT_TYPE_CATEGORY);
+    const options = await this.controlPanelService.findByCategory(
+      PRODUCT_TYPE_CATEGORY,
+    );
     return PackagesService.resolveMarginPolicy(
       pkg,
       PackagesService.matchProduct(options, pkg.productType),
@@ -79,7 +87,9 @@ export class PackagesService {
     packages: PackageDocument[],
     role: Role,
   ): Promise<Record<string, unknown>[]> {
-    const options = await this.controlPanelService.findByCategory(PRODUCT_TYPE_CATEGORY);
+    const options = await this.controlPanelService.findByCategory(
+      PRODUCT_TYPE_CATEGORY,
+    );
     return packages.map((pkg) => {
       const policy = PackagesService.resolveMarginPolicy(
         pkg,
@@ -94,7 +104,10 @@ export class PackagesService {
     });
   }
 
-  async presentOne(pkg: PackageDocument, role: Role): Promise<Record<string, unknown>> {
+  async presentOne(
+    pkg: PackageDocument,
+    role: Role,
+  ): Promise<Record<string, unknown>> {
     const [presented] = await this.presentMany([pkg], role);
     return presented;
   }
@@ -103,7 +116,10 @@ export class PackagesService {
   // else an empty allowedPackages list means "no restriction configured" — the
   // same convention Adder.applicablePackages uses. Resolved per request rather
   // than baked into the JWT so revoking access takes effect immediately.
-  private async allowedIdsFor(userId: string, role: Role): Promise<Types.ObjectId[] | null> {
+  private async allowedIdsFor(
+    userId: string,
+    role: Role,
+  ): Promise<Types.ObjectId[] | null> {
     if (role === Role.ADMIN || role === Role.OPS) return null;
     const user = await this.usersService.findByIdLean(userId);
     const allowed = user.allowedPackages ?? [];
@@ -123,7 +139,11 @@ export class PackagesService {
 
   // Guards the write path: a rep must not be able to quote a package they were
   // never granted, even by POSTing its id directly.
-  async assertUserMayUse(userId: string, role: Role, packageId: string): Promise<void> {
+  async assertUserMayUse(
+    userId: string,
+    role: Role,
+    packageId: string,
+  ): Promise<void> {
     const allowed = await this.allowedIdsFor(userId, role);
     if (!allowed) return;
     if (!allowed.some((id) => id.toString() === packageId)) {
@@ -149,7 +169,9 @@ export class PackagesService {
   }
 
   async update(id: string, dto: UpdatePackageDto): Promise<PackageDocument> {
-    const pkg = await this.packageModel.findByIdAndUpdate(id, dto, { new: true }).exec();
+    const pkg = await this.packageModel
+      .findByIdAndUpdate(id, dto, { new: true })
+      .exec();
     if (!pkg) {
       throw new NotFoundException('Package not found');
     }
@@ -164,7 +186,10 @@ export class PackagesService {
   }
 
   // Nick's override must never reach a non-admin client — strip it at the edge.
-  static sanitizeForRole(pkg: PackageDocument, role: Role): Record<string, unknown> {
+  static sanitizeForRole(
+    pkg: PackageDocument,
+    role: Role,
+  ): Record<string, unknown> {
     const plain = pkg.toJSON() as Record<string, unknown>;
     if (role === Role.ADMIN) {
       return plain;

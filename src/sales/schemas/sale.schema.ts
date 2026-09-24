@@ -21,7 +21,8 @@ export class CommissionBreakdown {
   nickOverride: number;
 }
 
-export const CommissionBreakdownSchema = SchemaFactory.createForClass(CommissionBreakdown);
+export const CommissionBreakdownSchema =
+  SchemaFactory.createForClass(CommissionBreakdown);
 
 export type SaleDocument = Sale & Document;
 
@@ -91,7 +92,11 @@ export class Sale {
   @Prop({ type: Date, default: null })
   paidDate: Date | null;
 
-  @Prop({ type: String, enum: ['not_installed', 'installed'], default: 'not_installed' })
+  @Prop({
+    type: String,
+    enum: ['not_installed', 'installed'],
+    default: 'not_installed',
+  })
   installStatus: 'not_installed' | 'installed';
 }
 

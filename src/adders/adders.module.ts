@@ -5,7 +5,9 @@ import { AddersController } from './adders.controller';
 import { Adder, AdderSchema } from './schemas/adder.schema';
 
 @Module({
-  imports: [MongooseModule.forFeature([{ name: Adder.name, schema: AdderSchema }])],
+  imports: [
+    MongooseModule.forFeature([{ name: Adder.name, schema: AdderSchema }]),
+  ],
   controllers: [AddersController],
   providers: [AddersService],
   exports: [AddersService],

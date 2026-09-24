@@ -46,7 +46,12 @@ const WATER_TYPE_LABELS: Record<string, string> = {
 /** Shape of a proposal after ProposalsService POPULATE has run. */
 interface PopulatedProposal {
   // Populated references: Mongoose yields null when the target was deleted.
-  customer: { name: string; address: string; phone?: string; email?: string } | null;
+  customer: {
+    name: string;
+    address: string;
+    phone?: string;
+    email?: string;
+  } | null;
   salesRep: { name: string; email: string } | null;
   waterType: string;
   package: {
@@ -98,7 +103,10 @@ function imageSize(buf: Buffer): { width: number; height: number } | null {
         marker !== 0xc8 &&
         marker !== 0xcc
       ) {
-        return { height: buf.readUInt16BE(i + 5), width: buf.readUInt16BE(i + 7) };
+        return {
+          height: buf.readUInt16BE(i + 5),
+          width: buf.readUInt16BE(i + 7),
+        };
       }
       i += 2 + buf.readUInt16BE(i + 2);
     }
@@ -118,7 +126,9 @@ export class ProposalPdfService {
    * slow URL must never fail the whole download, so every fetch is time-boxed
    * and failures fall through to "no image".
    */
-  private async fetchImage(url: string | null | undefined): Promise<Buffer | null> {
+  private async fetchImage(
+    url: string | null | undefined,
+  ): Promise<Buffer | null> {
     if (!url) return null;
     try {
       const controller = new AbortController();
@@ -131,7 +141,9 @@ export class ProposalPdfService {
       if (!/image\/(jpeg|jpg|png)/i.test(type)) return null;
       return Buffer.from(await res.arrayBuffer());
     } catch (err) {
-      this.logger.warn(`Could not load image ${url}: ${(err as Error).message}`);
+      this.logger.warn(
+        `Could not load image ${url}: ${(err as Error).message}`,
+      );
       return null;
     }
   }
@@ -169,7 +181,11 @@ export class ProposalPdfService {
       this.fetchImage(this.absolute(p.package.imageUrl)),
     ]);
 
-    const doc = new PDFDocument({ size: 'LETTER', margin: 0, bufferPages: true });
+    const doc = new PDFDocument({
+      size: 'LETTER',
+      margin: 0,
+      bufferPages: true,
+    });
     const chunks: Buffer[] = [];
     doc.on('data', (c: Buffer) => chunks.push(c));
     const done = new Promise<void>((resolve) => doc.on('end', () => resolve()));
@@ -276,7 +292,9 @@ export class ProposalPdfService {
 
     // Measure before drawing: the sub-line wraps on long terms, and a fixed
     // height pushed it outside the border.
-    const headLabel = financed ? 'ESTIMATED MONTHLY PAYMENT' : 'TOTAL INVESTMENT';
+    const headLabel = financed
+      ? 'ESTIMATED MONTHLY PAYMENT'
+      : 'TOTAL INVESTMENT';
     const headValue = financed
       ? `${money2(p.monthlyPayment as number)}/mo`
       : money(p.cashPrice);
@@ -291,14 +309,21 @@ export class ProposalPdfService {
 
     const innerW = boxW - 24;
     doc.font(SANS_BOLD).fontSize(7.5);
-    const hLabel = doc.heightOfString(headLabel, { width: innerW, characterSpacing: 1 });
+    const hLabel = doc.heightOfString(headLabel, {
+      width: innerW,
+      characterSpacing: 1,
+    });
     doc.font(SANS_BOLD).fontSize(24);
     const hValue = doc.heightOfString(headValue, { width: innerW });
     doc.font(SANS).fontSize(8.5);
     const hSub = doc.heightOfString(headSub, { width: innerW });
     const boxH = padY * 2 + hLabel + hValue + hSub + 4;
 
-    doc.roundedRect(boxX, introTop, boxW, boxH, 8).lineWidth(1.5).strokeColor(accent).stroke();
+    doc
+      .roundedRect(boxX, introTop, boxW, boxH, 8)
+      .lineWidth(1.5)
+      .strokeColor(accent)
+      .stroke();
 
     doc
       .font(SANS_BOLD)
@@ -331,7 +356,10 @@ export class ProposalPdfService {
       ensure(48);
       doc.font(SANS_BOLD).fontSize(11).fillColor(INK).text(title, L, y);
       y = doc.y + 4;
-      doc.roundedRect(L, y, 1.1 * CM, 2.5, 1.25).fillColor(accent).fill();
+      doc
+        .roundedRect(L, y, 1.1 * CM, 2.5, 1.25)
+        .fillColor(accent)
+        .fill();
       y += 2.5 + 0.32 * CM;
     };
 
@@ -344,17 +372,29 @@ export class ProposalPdfService {
       const size = kind === 'total' ? 11 : 9.5;
       ensure(size * 2.2);
       if (kind === 'total') {
-        doc.moveTo(L, y).lineTo(R, y).lineWidth(1.25).strokeColor(SLATE_300).stroke();
+        doc
+          .moveTo(L, y)
+          .lineTo(R, y)
+          .lineWidth(1.25)
+          .strokeColor(SLATE_300)
+          .stroke();
         y += 5;
       }
-      const font = kind === 'muted' ? SANS_OBLIQUE : kind === 'total' ? SANS_BOLD : SANS;
-      const colour = kind === 'muted' ? SLATE_400 : kind === 'total' ? INK : SLATE_700;
+      const font =
+        kind === 'muted' ? SANS_OBLIQUE : kind === 'total' ? SANS_BOLD : SANS;
+      const colour =
+        kind === 'muted' ? SLATE_400 : kind === 'total' ? INK : SLATE_700;
       doc.font(font).fontSize(size).fillColor(colour);
       doc.text(label, L, y, { width: CW * 0.62, lineBreak: false });
       doc.text(value, L, y, { width: CW, align: 'right', lineBreak: false });
       y += size * 1.35;
       if (kind !== 'total') {
-        doc.moveTo(L, y).lineTo(R, y).lineWidth(0.75).strokeColor(HAIRLINE).stroke();
+        doc
+          .moveTo(L, y)
+          .lineTo(R, y)
+          .lineWidth(0.75)
+          .strokeColor(HAIRLINE)
+          .stroke();
         y += 4;
       } else {
         y += 3;
@@ -438,7 +478,10 @@ export class ProposalPdfService {
         for (const item of p.package.inclusions) {
           doc.font(SANS).fontSize(9.5).fillColor(SLATE_700);
           const h = doc.heightOfString(item, { width: colW - 14 });
-          doc.circle(L + 2.5, cy + 5.5, 2).fillColor(SLATE_300).fill();
+          doc
+            .circle(L + 2.5, cy + 5.5, 2)
+            .fillColor(SLATE_300)
+            .fill();
           doc.fillColor(SLATE_700).text(item, L + 14, cy, { width: colW - 14 });
           cy += h + 3;
         }
@@ -492,7 +535,12 @@ export class ProposalPdfService {
           lineBreak: false,
         });
         y = top + rowH;
-        doc.moveTo(L, y).lineTo(R, y).lineWidth(0.75).strokeColor(HAIRLINE).stroke();
+        doc
+          .moveTo(L, y)
+          .lineTo(R, y)
+          .lineWidth(0.75)
+          .strokeColor(HAIRLINE)
+          .stroke();
         y += 4;
       });
 
@@ -521,7 +569,11 @@ export class ProposalPdfService {
         .filter(Boolean)
         .join(' · ');
       ensure(20);
-      doc.font(SANS).fontSize(8).fillColor(SLATE_400).text(note, L, y + 4, { width: CW });
+      doc
+        .font(SANS)
+        .fontSize(8)
+        .fillColor(SLATE_400)
+        .text(note, L, y + 4, { width: CW });
       y = doc.y;
     }
 

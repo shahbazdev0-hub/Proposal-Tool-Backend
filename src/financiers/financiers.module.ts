@@ -5,7 +5,11 @@ import { FinanciersController } from './financiers.controller';
 import { Financier, FinancierSchema } from './schemas/financier.schema';
 
 @Module({
-  imports: [MongooseModule.forFeature([{ name: Financier.name, schema: FinancierSchema }])],
+  imports: [
+    MongooseModule.forFeature([
+      { name: Financier.name, schema: FinancierSchema },
+    ]),
+  ],
   controllers: [FinanciersController],
   providers: [FinanciersService],
   exports: [FinanciersService],

@@ -1,4 +1,18 @@
-import { BadRequestException, Body, Controller, Delete, ForbiddenException, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Delete,
+  ForbiddenException,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { SalesService } from './sales.service';
 import { EmailService } from '../email/email.service';
 import { CreateSaleDto } from './dto/create-sale.dto';
@@ -13,7 +27,10 @@ import type { AuthenticatedUser } from '../auth/interfaces/authenticated-user.in
 
 // Maps a non-admin/ops role to the Sale field that scopes what they're allowed to see.
 const ROLE_SCOPE_FIELD: Partial<
-  Record<Role, 'salesRep' | 'directRecruiter' | 'teamLead' | 'regional' | 'partner'>
+  Record<
+    Role,
+    'salesRep' | 'directRecruiter' | 'teamLead' | 'regional' | 'partner'
+  >
 > = {
   [Role.SALES_REP]: 'salesRep',
   [Role.DIRECT_RECRUITER]: 'directRecruiter',
@@ -37,20 +54,30 @@ export class SalesController {
   }
 
   @Get()
-  async findAll(@CurrentUser() user: AuthenticatedUser, @Query() query: SalesQueryDto) {
+  async findAll(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: SalesQueryDto,
+  ) {
     const scopeField = ROLE_SCOPE_FIELD[user.role];
-    const restrict = scopeField ? { field: scopeField, userId: user.userId } : undefined;
+    const restrict = scopeField
+      ? { field: scopeField, userId: user.userId }
+      : undefined;
     const sales = await this.salesService.findAll(query, restrict);
     return sales.map((sale) => SalesService.sanitizeForRole(sale, user.role));
   }
 
   @Get(':id')
-  async findOne(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
+  async findOne(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+  ) {
     const sale = await this.salesService.findById(id);
 
     const scopeField = ROLE_SCOPE_FIELD[user.role];
     if (scopeField) {
-      const scopedUser = sale[scopeField] as { _id?: { toString(): string } } | null;
+      const scopedUser = sale[scopeField] as {
+        _id?: { toString(): string };
+      } | null;
       if (scopedUser?._id?.toString() !== user.userId) {
         throw new ForbiddenException("You don't have access to this sale");
       }
@@ -61,10 +88,7 @@ export class SalesController {
 
   @Roles(Role.ADMIN)
   @Patch(':id')
-  async update(
-    @Param('id') id: string,
-    @Body() dto: UpdateSaleDto,
-  ) {
+  async update(@Param('id') id: string, @Body() dto: UpdateSaleDto) {
     const sale = await this.salesService.update(id, dto);
     return SalesService.sanitizeForRole(sale, Role.ADMIN);
   }
@@ -92,12 +116,17 @@ export class SalesController {
   }
 
   @Post(':id/email')
-  async sendEmail(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+  async sendEmail(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
     const sale = await this.salesService.findById(id);
 
     const scopeField = ROLE_SCOPE_FIELD[user.role];
     if (scopeField) {
-      const scopedUser = sale[scopeField] as { _id?: { toString(): string } } | null;
+      const scopedUser = sale[scopeField] as {
+        _id?: { toString(): string };
+      } | null;
       if (scopedUser?._id?.toString() !== user.userId) {
         throw new ForbiddenException("You don't have access to this sale");
       }

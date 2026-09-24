@@ -7,7 +7,9 @@ import { UpdateAdderDto } from './dto/update-adder.dto';
 
 @Injectable()
 export class AddersService {
-  constructor(@InjectModel(Adder.name) private readonly adderModel: Model<AdderDocument>) {}
+  constructor(
+    @InjectModel(Adder.name) private readonly adderModel: Model<AdderDocument>,
+  ) {}
 
   create(dto: CreateAdderDto): Promise<AdderDocument> {
     const { applicablePackageIds, ...rest } = dto;
@@ -18,10 +20,14 @@ export class AddersService {
   }
 
   findAll(packageId?: string): Promise<AdderDocument[]> {
-    const filter =
-      packageId
-        ? { $or: [{ applicablePackages: { $size: 0 } }, { applicablePackages: packageId }] }
-        : {};
+    const filter = packageId
+      ? {
+          $or: [
+            { applicablePackages: { $size: 0 } },
+            { applicablePackages: packageId },
+          ],
+        }
+      : {};
     return this.adderModel.find(filter).sort({ name: 1 }).exec();
   }
 
@@ -38,7 +44,19 @@ export class AddersService {
   }
 
   async update(id: string, dto: UpdateAdderDto): Promise<AdderDocument> {
-    const adder = await this.adderModel.findByIdAndUpdate(id, dto, { new: true }).exec();
+    // The DTO's field is `applicablePackageIds`; the schema's is
+    // `applicablePackages`. Passing dto straight through left that key
+    // unrecognised by Mongoose, so package-applicability edits silently
+    // never persisted — translate it the same way create() does.
+    const { applicablePackageIds, ...rest } = dto;
+    const patch: Record<string, unknown> = { ...rest };
+    if (applicablePackageIds !== undefined) {
+      patch.applicablePackages = applicablePackageIds;
+    }
+
+    const adder = await this.adderModel
+      .findByIdAndUpdate(id, patch, { new: true })
+      .exec();
     if (!adder) {
       throw new NotFoundException('Adder not found');
     }

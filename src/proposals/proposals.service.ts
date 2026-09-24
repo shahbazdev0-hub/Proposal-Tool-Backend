@@ -5,21 +5,33 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { Proposal, ProposalDocument } from './schemas/proposal.schema';
 import { CreateProposalDto } from './dto/create-proposal.dto';
 import { UpdateProposalDto } from './dto/update-proposal.dto';
+import { TransferProposalDto } from './dto/transfer-proposal.dto';
 import { PackagesService } from '../packages/packages.service';
 import { AddersService } from '../adders/adders.service';
 import { FinanciersService } from '../financiers/financiers.service';
+import { UsersService } from '../users/users.service';
 import { Role } from '../common/enums/role.enum';
+
+// A populated ref comes back as a full document ({ _id, ...fields }); an
+// unpopulated one is a plain ObjectId. Both have a real toString() — this
+// just gives TS a concrete type to call it through instead of `unknown`.
+function refId(ref: Types.ObjectId | { _id: Types.ObjectId }): string {
+  return ('_id' in ref ? ref._id : ref).toString();
+}
 
 // Every read of a proposal hydrates the same references — keep the list in one
 // place so a field added here can't be missed by one of the call sites.
 const POPULATE = [
   { path: 'customer', select: 'name email phone address' },
   { path: 'salesRep', select: 'name email' },
-  { path: 'package', select: 'name price waterType inclusions maxMargin imageUrl' },
+  {
+    path: 'package',
+    select: 'name price waterType inclusions maxMargin imageUrl',
+  },
   { path: 'adders', select: 'name price imageUrl' },
   { path: 'financier', select: 'name' },
 ];
@@ -45,10 +57,12 @@ interface PricedProposal {
 @Injectable()
 export class ProposalsService {
   constructor(
-    @InjectModel(Proposal.name) private readonly proposalModel: Model<ProposalDocument>,
+    @InjectModel(Proposal.name)
+    private readonly proposalModel: Model<ProposalDocument>,
     private readonly packagesService: PackagesService,
     private readonly addersService: AddersService,
     private readonly financiersService: FinanciersService,
+    private readonly usersService: UsersService,
   ) {}
 
   /**
@@ -63,7 +77,11 @@ export class ProposalsService {
   ): Promise<PricedProposal> {
     // Catalog access is enforced on the write path too — a rep must not be able
     // to quote a package they were never granted by POSTing its id directly.
-    await this.packagesService.assertUserMayUse(salesRepId, role, dto.packageId);
+    await this.packagesService.assertUserMayUse(
+      salesRepId,
+      role,
+      dto.packageId,
+    );
     const pkg = await this.packagesService.findById(dto.packageId);
 
     // waterType is denormalised onto the proposal for reporting; if it
@@ -97,7 +115,9 @@ export class ProposalsService {
     const margin = await this.packagesService.getMarginPolicy(pkg);
     if (!margin.enabled) {
       if (dto.salesMargin > 0) {
-        throw new BadRequestException('Sales margin is disabled for this package.');
+        throw new BadRequestException(
+          'Sales margin is disabled for this package.',
+        );
       }
     } else if (dto.salesMargin > margin.cap) {
       throw new BadRequestException(
@@ -121,10 +141,14 @@ export class ProposalsService {
 
     if (dto.financierId && dto.loanOptionId) {
       const f = await this.financiersService.findById(dto.financierId);
-      const loanOption = f.loanOptions.find((lo) => lo._id?.toString() === dto.loanOptionId);
+      const loanOption = f.loanOptions.find(
+        (lo) => lo._id?.toString() === dto.loanOptionId,
+      );
       if (!loanOption) throw new NotFoundException('Loan option not found');
       if (!loanOption.isActive) {
-        throw new BadRequestException('That financing program is no longer active.');
+        throw new BadRequestException(
+          'That financing program is no longer active.',
+        );
       }
 
       financier = dto.financierId;
@@ -188,19 +212,69 @@ export class ProposalsService {
     return this.findById(String(created._id));
   }
 
-  findAll(requestingUserId: string, role: Role): Promise<ProposalDocument[]> {
-    const filter =
-      role === Role.ADMIN || role === Role.OPS ? {} : { salesRep: requestingUserId };
-    return this.proposalModel.find(filter).sort({ createdAt: -1 }).populate(POPULATE).exec();
+  async findAll(
+    requestingUserId: string,
+    role: Role,
+  ): Promise<ProposalDocument[]> {
+    const filter = await this.visibilityFilter(requestingUserId, role);
+    return this.proposalModel
+      .find(filter)
+      .sort({ createdAt: -1 })
+      .populate(POPULATE)
+      .exec();
   }
 
+  /** Internal accessor — no ownership check. Only for use after the caller
+   *  has already been authorized for this specific proposal by some other
+   *  means (just created it, already passed an update's own auth, etc). Do
+   *  not wire this straight to a controller route; use findByIdForUser. */
   async findById(id: string): Promise<ProposalDocument> {
-    const proposal = await this.proposalModel.findById(id).populate(POPULATE).exec();
+    const proposal = await this.proposalModel
+      .findById(id)
+      .populate(POPULATE)
+      .exec();
     if (!proposal) throw new NotFoundException('Proposal not found');
     return proposal;
   }
 
-  async update(id: string, dto: UpdateProposalDto, role: Role): Promise<ProposalDocument> {
+  /** The GET /:id route's accessor — same visibility rule as findAll (own
+   *  deals, everyone's deals for Admin/Ops, or a downline rep's deals for
+   *  their Direct Recruiter/Team Lead/Regional/Partner). */
+  async findByIdForUser(
+    id: string,
+    requestingUserId: string,
+    role: Role,
+  ): Promise<ProposalDocument> {
+    const proposal = await this.findById(id);
+    if (role === Role.ADMIN || role === Role.OPS) return proposal;
+
+    const salesRepId = refId(proposal.salesRep);
+    const visibleIds =
+      await this.usersService.visibleSalesRepIds(requestingUserId);
+    const isVisible = visibleIds.some(
+      (visibleId) => visibleId.toString() === salesRepId,
+    );
+    if (!isVisible) throw new NotFoundException('Proposal not found');
+    return proposal;
+  }
+
+  /** Own deals; everyone's for Admin/Ops; a downline rep's deals for whoever
+   *  that rep's admin put in Direct Recruiter/Team Lead/Regional/Partner. */
+  private async visibilityFilter(
+    requestingUserId: string,
+    role: Role,
+  ): Promise<Record<string, unknown>> {
+    if (role === Role.ADMIN || role === Role.OPS) return {};
+    const visibleIds =
+      await this.usersService.visibleSalesRepIds(requestingUserId);
+    return { salesRep: { $in: visibleIds } };
+  }
+
+  async update(
+    id: string,
+    dto: UpdateProposalDto,
+    role: Role,
+  ): Promise<ProposalDocument> {
     const existing = await this.findById(id);
 
     const idOf = (v: unknown): string =>
@@ -211,11 +285,14 @@ export class ProposalsService {
       // Client rule: only an admin may move a proposal between statuses. Reps
       // create and edit proposals, but never advance them.
       if (role !== Role.ADMIN) {
-        throw new ForbiddenException('Only an admin can change a proposal status.');
+        throw new ForbiddenException(
+          'Only an admin can change a proposal status.',
+        );
       }
       updates.status = dto.status;
     }
-    if (dto.convertedSaleId !== undefined) updates.convertedSaleId = dto.convertedSaleId;
+    if (dto.convertedSaleId !== undefined)
+      updates.convertedSaleId = dto.convertedSaleId;
 
     // Any change to a priced input re-runs the whole calculation, so an edited
     // proposal can never carry stale totals or slip past the margin cap. This
@@ -240,7 +317,8 @@ export class ProposalsService {
           adderIds: dto.adderIds ?? existing.adders.map(idOf),
           salesMargin: dto.salesMargin ?? existing.salesMargin,
           financierId:
-            dto.financierId ?? (existing.financier ? idOf(existing.financier) : undefined),
+            dto.financierId ??
+            (existing.financier ? idOf(existing.financier) : undefined),
           loanOptionId: dto.loanOptionId,
         },
         idOf(existing.salesRep),
@@ -248,10 +326,71 @@ export class ProposalsService {
       );
       Object.assign(updates, priced);
       if (dto.customerId) updates.customer = dto.customerId;
+
+      // priced.package/adders/financier and updates.customer are plain
+      // strings, but the schema types all four as ObjectId. findByIdAndUpdate
+      // does not reliably auto-cast a plain object's string values the way
+      // create() does — left uncast, these get stored as strings, and every
+      // $in / equality filter elsewhere (visibility checks, catalog lookups)
+      // silently stops matching the document. Cast explicitly.
+      if (typeof updates.package === 'string') {
+        updates.package = new Types.ObjectId(updates.package);
+      }
+      if (typeof updates.customer === 'string') {
+        updates.customer = new Types.ObjectId(updates.customer);
+      }
+      if (Array.isArray(updates.adders)) {
+        updates.adders = (updates.adders as string[]).map(
+          (a) => new Types.ObjectId(a),
+        );
+      }
+      if (typeof updates.financier === 'string') {
+        updates.financier = new Types.ObjectId(updates.financier);
+      }
     }
 
     const updated = await this.proposalModel
       .findByIdAndUpdate(id, updates, { new: true })
+      .populate(POPULATE)
+      .exec();
+    if (!updated) throw new NotFoundException('Proposal not found');
+    return updated;
+  }
+
+  /**
+   * Admin-only ownership transfer (scope: client request). Deliberately a
+   * separate action from update() rather than a field on it — folding this
+   * into the general update would let a single request both reassign the
+   * owner AND reprice against the OLD owner's catalog access in
+   * update()'s touchesPricing branch, which could let a proposal keep a
+   * price it was never valid for once it belongs to someone else.
+   */
+  async transfer(
+    id: string,
+    dto: TransferProposalDto,
+    role: Role,
+  ): Promise<ProposalDocument> {
+    if (role !== Role.ADMIN) {
+      throw new ForbiddenException(
+        'Only an admin can transfer a proposal to another user.',
+      );
+    }
+
+    // Throws NotFoundException if the target doesn't exist — that's exactly
+    // the validation wanted here, no need to duplicate it.
+    await this.usersService.findById(dto.salesRepId);
+
+    // Mongoose does not reliably auto-cast a hex string to ObjectId on
+    // findByIdAndUpdate for a @Prop({ type: Types.ObjectId }) path (same
+    // issue UsersService.castUplineIds works around) — cast explicitly, or
+    // salesRep gets stored as a plain string and every $in visibility
+    // filter elsewhere silently stops matching this proposal.
+    const updated = await this.proposalModel
+      .findByIdAndUpdate(
+        id,
+        { salesRep: new Types.ObjectId(dto.salesRepId) },
+        { new: true },
+      )
       .populate(POPULATE)
       .exec();
     if (!updated) throw new NotFoundException('Proposal not found');

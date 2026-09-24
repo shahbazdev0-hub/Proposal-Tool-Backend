@@ -16,7 +16,9 @@ export interface PayrollRow {
 
 @Injectable()
 export class PayrollService {
-  constructor(@InjectModel(Sale.name) private readonly saleModel: Model<SaleDocument>) {}
+  constructor(
+    @InjectModel(Sale.name) private readonly saleModel: Model<SaleDocument>,
+  ) {}
 
   async getReport(query: SalesQueryDto): Promise<PayrollRow[]> {
     const filter: Record<string, unknown> = {};
@@ -34,11 +36,22 @@ export class PayrollService {
           _id: '$salesRep',
           numberOfSales: { $sum: 1 },
           commissionEarned: { $sum: '$commissions.salesRep' },
-          commissionPaid: { $sum: { $cond: ['$commissionsPaid', '$commissions.salesRep', 0] } },
-          commissionDue: { $sum: { $cond: ['$commissionsPaid', 0, '$commissions.salesRep'] } },
+          commissionPaid: {
+            $sum: { $cond: ['$commissionsPaid', '$commissions.salesRep', 0] },
+          },
+          commissionDue: {
+            $sum: { $cond: ['$commissionsPaid', 0, '$commissions.salesRep'] },
+          },
         },
       },
-      { $lookup: { from: 'users', localField: '_id', foreignField: '_id', as: 'rep' } },
+      {
+        $lookup: {
+          from: 'users',
+          localField: '_id',
+          foreignField: '_id',
+          as: 'rep',
+        },
+      },
       { $unwind: '$rep' },
       {
         $project: {
@@ -75,7 +88,13 @@ export class PayrollService {
     const lines = [
       PayrollService.CSV_HEADERS.join(','),
       ...rows.map((row) =>
-        [row.repName, row.numberOfSales, row.commissionEarned, row.commissionPaid, row.commissionDue]
+        [
+          row.repName,
+          row.numberOfSales,
+          row.commissionEarned,
+          row.commissionPaid,
+          row.commissionDue,
+        ]
           .map(PayrollService.csvEscape)
           .join(','),
       ),
