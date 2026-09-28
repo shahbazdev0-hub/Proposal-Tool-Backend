@@ -1,12 +1,14 @@
 import { Module } from '@nestjs/common';
-import { MongooseModule } from '@nestjs/mongoose';
 import { PayrollService } from './payroll.service';
 import { PayrollController } from './payroll.controller';
-import { Sale, SaleSchema } from '../sales/schemas/sale.schema';
+import { SharedModelsModule } from '../common/shared-models.module';
 
 @Module({
   imports: [
-    MongooseModule.forFeature([{ name: Sale.name, schema: SaleSchema }]),
+    // Sale is registered once in SharedModelsModule rather than here too —
+    // see SharedModelsModule for why duplicate forFeature calls for the
+    // same model name were a real bug, not just redundant.
+    SharedModelsModule,
   ],
   controllers: [PayrollController],
   providers: [PayrollService],

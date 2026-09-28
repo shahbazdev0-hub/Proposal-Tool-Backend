@@ -1,15 +1,17 @@
 import { Module } from '@nestjs/common';
-import { MongooseModule } from '@nestjs/mongoose';
 import { CustomersService } from './customers.service';
 import { CustomersController } from './customers.controller';
-import { Customer, CustomerSchema } from './schemas/customer.schema';
 import { UsersModule } from '../users/users.module';
+import { SharedModelsModule } from '../common/shared-models.module';
 
 @Module({
   imports: [
-    MongooseModule.forFeature([
-      { name: Customer.name, schema: CustomerSchema },
-    ]),
+    // Customer's Mongoose model is registered once in SharedModelsModule
+    // (also used by UsersModule) rather than here too — a second
+    // forFeature call for the same model name silently produced a second
+    // compiled model that didn't apply the schema's ObjectId cast on
+    // write. See SharedModelsModule for the full story.
+    SharedModelsModule,
     UsersModule,
   ],
   controllers: [CustomersController],
