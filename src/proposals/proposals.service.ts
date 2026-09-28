@@ -6,7 +6,11 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { Proposal, ProposalDocument } from './schemas/proposal.schema';
+import {
+  Proposal,
+  ProposalDocument,
+  type ProposalStatus,
+} from './schemas/proposal.schema';
 import { CreateProposalDto } from './dto/create-proposal.dto';
 import { UpdateProposalDto } from './dto/update-proposal.dto';
 import { TransferProposalDto } from './dto/transfer-proposal.dto';
@@ -391,6 +395,29 @@ export class ProposalsService {
         { salesRep: new Types.ObjectId(dto.salesRepId) },
         { new: true },
       )
+      .populate(POPULATE)
+      .exec();
+    if (!updated) throw new NotFoundException('Proposal not found');
+    return updated;
+  }
+
+  /**
+   * System-driven status advancement — deliberately separate from update(),
+   * which is the admin-only manual "change the status dropdown" path.
+   * Whoever created a proposal must still be able to send it and have that
+   * automatically mark it sent, without needing admin rights; the manual
+   * dropdown's role check exists to stop a rep from hand-picking an
+   * arbitrary status ("approved"), not to block a real event (the email
+   * actually going out, the customer accepting) from recording itself. Not
+   * exposed on any controller route — only called from server-side flows
+   * that already know a specific transition really happened.
+   */
+  async advanceStatus(
+    id: string,
+    status: ProposalStatus,
+  ): Promise<ProposalDocument> {
+    const updated = await this.proposalModel
+      .findByIdAndUpdate(id, { status }, { new: true })
       .populate(POPULATE)
       .exec();
     if (!updated) throw new NotFoundException('Proposal not found');
