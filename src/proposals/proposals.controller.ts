@@ -78,7 +78,7 @@ export class ProposalsController {
 
   /** Emails the proposal to the customer with the PDF attached. */
   @Post(':id/send')
-  async send(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+  async send(@Param('id') id: string) {
     const proposal = await this.proposalsService.findById(id);
     const customer = proposal.customer as unknown as {
       name?: string;
@@ -109,9 +109,12 @@ export class ProposalsController {
     });
 
     // Advance a draft once the mail actually goes out, but never regress a
-    // proposal the customer has already accepted or declined.
+    // proposal the customer has already accepted or declined. This is a
+    // system-driven transition (the email really was sent), not a manual
+    // status pick, so it goes through advanceStatus rather than update() —
+    // any sales rep can send their own proposal, not just an admin.
     if (proposal.status === 'draft') {
-      return this.proposalsService.update(id, { status: 'sent' }, user.role);
+      return this.proposalsService.advanceStatus(id, 'sent');
     }
     return this.proposalsService.findById(id);
   }

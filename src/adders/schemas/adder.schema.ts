@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, Types } from 'mongoose';
+import { Document, Schema as MongooseSchema, Types } from 'mongoose';
 
 export type AdderDocument = Adder & Document;
 
@@ -18,8 +18,14 @@ export class Adder {
   @Prop({ type: String, trim: true, default: null })
   imageUrl: string | null;
 
+  // MongooseSchema.Types.ObjectId, not Types.ObjectId — the latter silently
+  // compiled to a Mixed field under @nestjs/mongoose's SchemaFactory. See
+  // customer.schema.ts for the full explanation.
   /** Empty = applies to all packages. Non-empty = only shown for listed packages. */
-  @Prop({ type: [{ type: Types.ObjectId, ref: 'Package' }], default: [] })
+  @Prop({
+    type: [{ type: MongooseSchema.Types.ObjectId, ref: 'Package' }],
+    default: [],
+  })
   applicablePackages: Types.ObjectId[];
 }
 
