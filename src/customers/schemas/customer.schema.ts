@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, Types } from 'mongoose';
+import { Document, Schema as MongooseSchema, Types } from 'mongoose';
 
 export type CustomerDocument = Customer & Document;
 
@@ -39,8 +39,15 @@ export class Customer {
   @Prop({ type: String, trim: true, default: null })
   notes: string | null;
 
+  // `type: MongooseSchema.Types.ObjectId`, not `Types.ObjectId` — the two
+  // look interchangeable and both work with a plain `new mongoose.Schema`,
+  // but @nestjs/mongoose's SchemaFactory.createForClass only recognises the
+  // MongooseSchema.Types form; `Types.ObjectId` here silently compiles to a
+  // Mixed field, which drops the ObjectId cast on every write. Confirmed by
+  // reproducing outside the app: this one-word difference is what caused
+  // every write of this field to store a plain string.
   /** The rep who created this customer record. */
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'User', required: true })
   createdBy: Types.ObjectId;
 }
 
