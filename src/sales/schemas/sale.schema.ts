@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, Types } from 'mongoose';
+import { Document, Schema as MongooseSchema, Types } from 'mongoose';
 @Schema({ _id: false })
 export class CommissionBreakdown {
   @Prop({ required: true })
@@ -40,7 +40,15 @@ export class Sale {
   @Prop({ type: Date, default: null })
   installDate: Date | null;
 
-  @Prop({ type: Types.ObjectId, ref: 'Financier', default: null })
+  // Every ObjectId-typed @Prop below uses MongooseSchema.Types.ObjectId, not
+  // Types.ObjectId — @nestjs/mongoose's SchemaFactory.createForClass only
+  // recognises the former as `type:`; the latter silently compiled to a
+  // Mixed field, dropping the cast on every write. See customer.schema.ts.
+  @Prop({
+    type: MongooseSchema.Types.ObjectId,
+    ref: 'Financier',
+    default: null,
+  })
   financier: Types.ObjectId | null;
 
   // Snapshots of the chosen loan option, taken at sale time so historical
@@ -57,30 +65,33 @@ export class Sale {
   @Prop({ required: true, type: String })
   waterType: string;
 
-  @Prop({ type: Types.ObjectId, ref: 'Package', required: true })
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Package', required: true })
   package: Types.ObjectId;
 
-  @Prop({ type: [{ type: Types.ObjectId, ref: 'Adder' }], default: [] })
+  @Prop({
+    type: [{ type: MongooseSchema.Types.ObjectId, ref: 'Adder' }],
+    default: [],
+  })
   adders: Types.ObjectId[];
 
   @Prop({ required: true, min: 0, default: 0 })
   addersTotal: number;
 
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'User', required: true })
   salesRep: Types.ObjectId;
 
   // Upline snapshot at time of sale — deliberately decoupled from the User
   // document so promoting/reassigning a rep later doesn't rewrite history.
-  @Prop({ type: Types.ObjectId, ref: 'User', default: null })
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'User', default: null })
   directRecruiter: Types.ObjectId | null;
 
-  @Prop({ type: Types.ObjectId, ref: 'User', default: null })
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'User', default: null })
   teamLead: Types.ObjectId | null;
 
-  @Prop({ type: Types.ObjectId, ref: 'User', default: null })
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'User', default: null })
   regional: Types.ObjectId | null;
 
-  @Prop({ type: Types.ObjectId, ref: 'User', default: null })
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'User', default: null })
   partner: Types.ObjectId | null;
 
   @Prop({ type: CommissionBreakdownSchema, required: true })

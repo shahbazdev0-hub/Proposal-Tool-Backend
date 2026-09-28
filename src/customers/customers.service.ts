@@ -11,6 +11,10 @@ import { UpdateCustomerDto } from './dto/update-customer.dto';
 import { TransferCustomerDto } from './dto/transfer-customer.dto';
 import { Role } from '../common/enums/role.enum';
 import { UsersService } from '../users/users.service';
+import {
+  Proposal,
+  ProposalDocument,
+} from '../proposals/schemas/proposal.schema';
 
 // A populated ref comes back as a full document ({ _id, ...fields }); an
 // unpopulated one is a plain ObjectId. Both have a real toString() — this
@@ -35,6 +39,8 @@ export class CustomersService {
   constructor(
     @InjectModel(Customer.name)
     private readonly customerModel: Model<CustomerDocument>,
+    @InjectModel(Proposal.name)
+    private readonly proposalModel: Model<ProposalDocument>,
     private readonly usersService: UsersService,
   ) {}
 
@@ -149,11 +155,20 @@ export class CustomersService {
     // findByIdAndUpdate for a @Prop({ type: Types.ObjectId }) path — cast
     // explicitly, or createdBy gets stored as a plain string and every $in
     // visibility filter elsewhere silently stops matching this customer.
+    const newOwnerId = new Types.ObjectId(dto.ownerId);
     const customer = await this.customerModel
-      .findByIdAndUpdate(id, { createdBy: new Types.ObjectId(dto.ownerId) }, { new: true })
+      .findByIdAndUpdate(id, { createdBy: newOwnerId }, { new: true })
       .populate('createdBy', 'name email')
       .exec();
     if (!customer) throw new NotFoundException('Customer not found');
+
+    // Cascade to every proposal tied to this customer — otherwise the new
+    // owner sees the customer but not the deals attached to them, which
+    // reads as data going missing rather than a deliberate second step.
+    await this.proposalModel
+      .updateMany({ customer: customer._id }, { salesRep: newOwnerId })
+      .exec();
+
     return customer;
   }
 

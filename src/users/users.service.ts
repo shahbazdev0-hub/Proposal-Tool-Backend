@@ -212,6 +212,21 @@ export class UsersService {
    */
   async visibleSalesRepIds(userId: string): Promise<Types.ObjectId[]> {
     const id = new Types.ObjectId(userId);
+
+    // A deactivated user's downline visibility stops with them — being
+    // someone's upline used to grant access to that person's
+    // proposals/customers, but it shouldn't keep doing that once the
+    // upline account itself is deactivated. This only matters if a
+    // deactivated user's token is still valid (e.g. not yet expired) or
+    // this is ever called from a non-login-gated context; login already
+    // refuses inactive users, so this is a second, independent guard on
+    // the access itself rather than relying on the login check alone.
+    const requester = await this.userModel
+      .findById(id)
+      .select('isActive')
+      .exec();
+    if (!requester || !requester.isActive) return [id];
+
     const downline = await this.userModel
       .find({
         $or: UPLINE_FIELDS.map((field) => ({ [field]: id })),
@@ -221,7 +236,75 @@ export class UsersService {
     return [id, ...downline.map((u) => u._id)];
   }
 
+  /**
+   * "My Team" for a given user: their own upline (the Direct Recruiter/Team
+   * Lead/Regional/Partner already on their record — who they roll up to)
+   * plus their downline (every other user who has THEM in one of those four
+   * slots — who rolls up to them, and as what). A user can appear in more
+   * than one downline slot for the same person (e.g. also their Partner),
+   * so each entry lists every relationship, not just the first match.
+   */
+  async getTeam(userId: string): Promise<{
+    upline: {
+      directRecruiter: UserDocument | null;
+      teamLead: UserDocument | null;
+      regional: UserDocument | null;
+      partner: UserDocument | null;
+    };
+    downline: {
+      user: UserDocument;
+      relationships: (typeof UPLINE_FIELDS)[number][];
+    }[];
+  }> {
+    const self = await this.findById(userId);
+    const id = self._id;
+
+    // Only active downline: a deactivated user's downline VISIBILITY into
+    // proposals/customers already stops the moment they're deactivated
+    // (visibleSalesRepIds) — showing them here as if still part of the
+    // working team would be inconsistent with that.
+    const downlineUsers = await this.userModel
+      .find({
+        isActive: true,
+        $or: UPLINE_FIELDS.map((field) => ({ [field]: id })),
+      })
+      .sort({ name: 1 })
+      .exec();
+
+    // A deactivated upline person is no longer a live relationship, same
+    // reasoning as filtering the downline list above — shown as "None set"
+    // rather than presenting someone who can no longer log in as this
+    // user's current Direct Recruiter/Team Lead/Regional/Partner.
+    const activeOnly = (person: UserDocument | null): UserDocument | null =>
+      person?.isActive ? person : null;
+
+    return {
+      upline: {
+        directRecruiter: activeOnly(
+          self.directRecruiter as UserDocument | null,
+        ),
+        teamLead: activeOnly(self.teamLead as UserDocument | null),
+        regional: activeOnly(self.regional as UserDocument | null),
+        partner: activeOnly(self.partner as UserDocument | null),
+      },
+      downline: downlineUsers.map((u) => ({
+        user: u,
+        relationships: UPLINE_FIELDS.filter((field) => {
+          const value = u[field];
+          return value && value.toString() === id.toString();
+        }),
+      })),
+    };
+  }
+
   async update(id: string, dto: UpdateUserDto): Promise<UserDocument> {
+    if (dto.email) {
+      const existing = await this.userModel.findOne({ email: dto.email });
+      if (existing && existing._id.toString() !== id) {
+        throw new ConflictException('A user with this email already exists');
+      }
+    }
+
     const updates: Record<string, unknown> = { ...dto };
 
     if (dto.password) {

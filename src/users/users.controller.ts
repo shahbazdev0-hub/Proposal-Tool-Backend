@@ -36,6 +36,14 @@ export class UsersController {
     return this.usersService.findById(user.userId);
   }
 
+  /** "My Team": this user's own upline plus everyone who reports up
+   *  through them. No @Roles() — every authenticated user has a team page,
+   *  not just admins. */
+  @Get('me/team')
+  getMyTeam(@CurrentUser() user: AuthenticatedUser) {
+    return this.usersService.getTeam(user.userId);
+  }
+
   @Patch('me')
   updateMe(@CurrentUser() user: AuthenticatedUser, @Body() dto: UpdateSelfDto) {
     return this.usersService.updateSelf(user.userId, dto);

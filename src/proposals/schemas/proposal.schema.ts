@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, Types } from 'mongoose';
+import { Document, Schema as MongooseSchema, Types } from 'mongoose';
 
 export type ProposalDocument = Proposal & Document;
 
@@ -16,21 +16,33 @@ export const PROPOSAL_STATUSES: ProposalStatus[] = [
   'converted',
 ];
 
+// Every ObjectId-typed @Prop below uses MongooseSchema.Types.ObjectId, not
+// Types.ObjectId — @nestjs/mongoose's SchemaFactory.createForClass only
+// recognises the former as `type:`; the latter silently compiled to a Mixed
+// field, dropping the cast on every write. Confirmed by reproducing outside
+// the app — see customer.schema.ts for the full explanation.
 @Schema({ timestamps: true })
 export class Proposal {
-  @Prop({ type: Types.ObjectId, ref: 'Customer', required: true })
+  @Prop({
+    type: MongooseSchema.Types.ObjectId,
+    ref: 'Customer',
+    required: true,
+  })
   customer: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'User', required: true })
   salesRep: Types.ObjectId;
 
   @Prop({ required: true, type: String })
   waterType: string;
 
-  @Prop({ type: Types.ObjectId, ref: 'Package', required: true })
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Package', required: true })
   package: Types.ObjectId;
 
-  @Prop({ type: [{ type: Types.ObjectId, ref: 'Adder' }], default: [] })
+  @Prop({
+    type: [{ type: MongooseSchema.Types.ObjectId, ref: 'Adder' }],
+    default: [],
+  })
   adders: Types.ObjectId[];
 
   @Prop({ required: true, min: 0, default: 0 })
@@ -45,7 +57,11 @@ export class Proposal {
 
   // ── Financing snapshot (null = cash sale) ──────────────────────────────────
 
-  @Prop({ type: Types.ObjectId, ref: 'Financier', default: null })
+  @Prop({
+    type: MongooseSchema.Types.ObjectId,
+    ref: 'Financier',
+    default: null,
+  })
   financier: Types.ObjectId | null;
 
   @Prop({ type: String, default: null })
@@ -79,7 +95,7 @@ export class Proposal {
   status: ProposalStatus;
 
   /** Populated once status === 'converted'. */
-  @Prop({ type: Types.ObjectId, ref: 'Sale', default: null })
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Sale', default: null })
   convertedSaleId: Types.ObjectId | null;
 }
 
