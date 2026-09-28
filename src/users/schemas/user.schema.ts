@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, Types } from 'mongoose';
+import { Document, Schema as MongooseSchema, Types } from 'mongoose';
 import { Role } from '../../common/enums/role.enum';
 
 export type UserDocument = User & Document;
@@ -30,26 +30,36 @@ export class User {
   @Prop({ default: true })
   isActive: boolean;
 
+  // Every ObjectId-typed @Prop below uses MongooseSchema.Types.ObjectId, not
+  // Types.ObjectId — @nestjs/mongoose's SchemaFactory.createForClass only
+  // recognises the former as `type:`; the latter silently compiled to a
+  // Mixed field, dropping the cast on every write. See customer.schema.ts.
+  // (castUplineIds() in users.service.ts was a manual workaround for this
+  // exact gap on the write path — now redundant but left in place, since
+  // it's still a correct explicit cast either way.)
   /**
    * Catalog access control (scope §3). Empty = this user may quote every active
    * package. Non-empty = the user only sees and may quote the listed packages.
    * Mirrors the Adder.applicablePackages convention.
    */
-  @Prop({ type: [{ type: Types.ObjectId, ref: 'Package' }], default: [] })
+  @Prop({
+    type: [{ type: MongooseSchema.Types.ObjectId, ref: 'Package' }],
+    default: [],
+  })
   allowedPackages: Types.ObjectId[];
 
   // Upline chain — who this user's deals roll commissions up to.
   // Set by Admin only; drives override payouts in the commission engine.
-  @Prop({ type: Types.ObjectId, ref: User.name, default: null })
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: User.name, default: null })
   directRecruiter?: Types.ObjectId | null;
 
-  @Prop({ type: Types.ObjectId, ref: User.name, default: null })
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: User.name, default: null })
   teamLead?: Types.ObjectId | null;
 
-  @Prop({ type: Types.ObjectId, ref: User.name, default: null })
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: User.name, default: null })
   regional?: Types.ObjectId | null;
 
-  @Prop({ type: Types.ObjectId, ref: User.name, default: null })
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: User.name, default: null })
   partner?: Types.ObjectId | null;
 
   // Set-password token — used both for the initial invite (sent on create,
