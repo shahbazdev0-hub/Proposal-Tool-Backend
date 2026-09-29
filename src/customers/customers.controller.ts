@@ -41,9 +41,14 @@ export class CustomersController {
     return this.customersService.findByIdForUser(id, user.userId, user.role);
   }
 
+  /** Admin-only edit — see CustomersService.update. */
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateCustomerDto) {
-    return this.customersService.update(id, dto);
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateCustomerDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.customersService.update(id, dto, user.role);
   }
 
   /** Admin-only ownership transfer — see CustomersService.transfer. */
@@ -56,9 +61,10 @@ export class CustomersController {
     return this.customersService.transfer(id, dto, user.role);
   }
 
+  /** Admin-only delete — see CustomersService.remove. */
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  remove(@Param('id') id: string) {
-    return this.customersService.remove(id);
+  remove(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.customersService.remove(id, user.role);
   }
 }
