@@ -107,7 +107,15 @@ export class CustomersService {
     return customer;
   }
 
-  async update(id: string, dto: UpdateCustomerDto): Promise<CustomerDocument> {
+  async update(
+    id: string,
+    dto: UpdateCustomerDto,
+    role: Role,
+  ): Promise<CustomerDocument> {
+    if (role !== Role.ADMIN) {
+      throw new ForbiddenException('Only an admin can edit a customer.');
+    }
+
     const patch: UpdateCustomerDto & { address?: string } = { ...dto };
 
     // Re-derive the combined string whenever any of its parts change —
@@ -172,7 +180,11 @@ export class CustomersService {
     return customer;
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(id: string, role: Role): Promise<void> {
+    if (role !== Role.ADMIN) {
+      throw new ForbiddenException('Only an admin can delete a customer.');
+    }
+
     const result = await this.customerModel.findByIdAndDelete(id).exec();
     if (!result) throw new NotFoundException('Customer not found');
   }
