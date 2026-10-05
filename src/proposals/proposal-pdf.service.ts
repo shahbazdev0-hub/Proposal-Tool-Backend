@@ -37,12 +37,6 @@ const money = (n: number): string => '$' + n.toLocaleString('en-US');
 const money2 = (n: number): string =>
   '$' + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 
-const WATER_TYPE_LABELS: Record<string, string> = {
-  supreme: 'Supreme Water',
-  homewater: 'Homewater',
-  h2pros: 'H2Pros',
-};
-
 /** Shape of a proposal after ProposalsService POPULATE has run. */
 interface PopulatedProposal {
   // Populated references: Mongoose yields null when the target was deleted.
@@ -60,7 +54,13 @@ interface PopulatedProposal {
     inclusions: string[];
     imageUrl: string | null;
   } | null;
-  adders: { name: string; price: number; imageUrl: string | null }[];
+  adders: {
+    _id: { toString(): string };
+    name: string;
+    price: number;
+    imageUrl: string | null;
+  }[];
+  adderPrices: Map<string, number> | Record<string, number>;
   addersTotal: number;
   salesMargin: number;
   cashPrice: number;
@@ -440,10 +440,7 @@ export class ProposalPdfService {
     }
 
     {
-      const specs: [string, string][] = [
-        ['WATER TYPE', WATER_TYPE_LABELS[p.waterType] ?? p.waterType],
-        ['PACKAGE', p.package.name],
-      ];
+      const specs: [string, string][] = [['PACKAGE', p.package.name]];
       for (const [label, value] of specs) {
         doc
           .font(SANS_BOLD)
@@ -495,6 +492,16 @@ export class ProposalPdfService {
       y = Math.max(y, systemTop + imgDrawnH + 0.3 * CM);
     }
 
+    // The catalog price can drift after a proposal is quoted (and a dynamic
+    // adder's chosen price never equals the catalog price at all) — always
+    // read what was actually charged, stored per-proposal, falling back to
+    // the catalog price only for proposals quoted before this field existed.
+    const priceOfAdder = (id: string, fallback: number): number => {
+      const prices = p.adderPrices;
+      const stored = prices instanceof Map ? prices.get(id) : prices?.[id];
+      return stored ?? fallback;
+    };
+
     if (p.adders?.length) {
       sublabel('SELECTED UPGRADES');
 
@@ -529,7 +536,7 @@ export class ProposalPdfService {
             width: CW * 0.62 - THUMB,
             lineBreak: false,
           });
-        doc.text(money(a.price), L, top + THUMB / 2 - 5, {
+        doc.text(money(priceOfAdder(a._id.toString(), a.price)), L, top + THUMB / 2 - 5, {
           width: CW,
           align: 'right',
           lineBreak: false,
@@ -552,12 +559,12 @@ export class ProposalPdfService {
     // ── Investment summary ────────────────────────────────────────────────────
     section('Investment summary');
     line(`${p.package.name} package`, money(p.package.price));
-    if (p.addersTotal > 0) line('Upgrades', money(p.addersTotal));
-    if (p.salesMargin > 0) line('Options & installation', money(p.salesMargin));
+    if (p.addersTotal + p.salesMargin > 0) {
+      line('Upgrades', money(p.addersTotal + p.salesMargin));
+    }
     line('Total cash price', money(p.cashPrice), 'total');
 
     if (p.financier) {
-      line(`Dealer fee (${p.dealerFeePercent}%)`, money2(p.dealerFee), 'muted');
       line('Amount financed', money2(p.financedAmount), 'total');
 
       const note = [
