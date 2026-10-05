@@ -45,6 +45,17 @@ export class Proposal {
   })
   adders: Types.ObjectId[];
 
+  /**
+   * The price actually charged for each adder in `adders`, keyed by adder id
+   * as a string. A static adder's entry always equals its catalog price at
+   * the time of quoting; a dynamic adder's entry is whatever the rep chose
+   * within its allowed range. Stored per-proposal (not re-derived from the
+   * catalog) so a later catalog price change never rewrites an existing
+   * proposal's total.
+   */
+  @Prop({ type: Map, of: Number, default: {} })
+  adderPrices: Map<string, number>;
+
   @Prop({ required: true, min: 0, default: 0 })
   addersTotal: number;
 

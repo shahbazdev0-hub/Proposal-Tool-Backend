@@ -1,5 +1,6 @@
 import {
   IsArray,
+  IsEnum,
   IsMongoId,
   IsNumber,
   IsOptional,
@@ -14,6 +15,15 @@ export class CreateAdderDto {
   @IsNumber()
   @Min(0)
   price: number;
+
+  @IsOptional()
+  @IsEnum(['static', 'dynamic'])
+  pricingMode?: 'static' | 'dynamic';
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  maxExtra?: number | null;
 
   @IsOptional()
   @IsString()
