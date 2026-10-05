@@ -1,3 +1,4 @@
+import { Type } from 'class-transformer';
 import {
   IsArray,
   IsMongoId,
@@ -5,7 +6,21 @@ import {
   IsOptional,
   IsString,
   Min,
+  ValidateNested,
 } from 'class-validator';
+
+export class ProposalAdderDto {
+  @IsMongoId()
+  adderId: string;
+
+  // Only meaningful for a dynamic adder — the price the rep chose within its
+  // allowed range. Omitted/ignored for a static adder, which always prices
+  // at the catalog value.
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  price?: number;
+}
 
 export class CreateProposalDto {
   @IsMongoId()
@@ -19,8 +34,9 @@ export class CreateProposalDto {
 
   @IsOptional()
   @IsArray()
-  @IsMongoId({ each: true })
-  adderIds?: string[];
+  @ValidateNested({ each: true })
+  @Type(() => ProposalAdderDto)
+  adders?: ProposalAdderDto[];
 
   @IsNumber()
   @Min(0)
