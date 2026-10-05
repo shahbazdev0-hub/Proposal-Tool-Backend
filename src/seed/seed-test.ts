@@ -317,9 +317,9 @@ async function seedTest() {
     const allAdders = await app
       .get(require('../adders/adders.service').AddersService)
       .findAll();
-    const adderIds = allAdders
+    const adders = allAdders
       .slice(0, 2)
-      .map((a: any) => (a._id as Types.ObjectId).toString());
+      .map((a: any) => ({ adderId: (a._id as Types.ObjectId).toString() }));
 
     // Proposal 1 — Supreme Diamond, financed, status: sent
     const p1 = await proposalsService.create(
@@ -327,7 +327,7 @@ async function seedTest() {
         customerId: cust1._id.toString(),
         waterType: WaterType.SUPREME,
         packageId: goldId,
-        adderIds,
+        adders,
         salesMargin: 500,
         financierId: fWithLoan ? fWithLoan._id.toString() : undefined,
         loanOptionId: fWithLoan
@@ -348,7 +348,7 @@ async function seedTest() {
         customerId: cust2._id.toString(),
         waterType: WaterType.SUPREME,
         packageId: silverId,
-        adderIds: [],
+        adders: [],
         salesMargin: 0,
       },
       rep1Id,
@@ -365,7 +365,7 @@ async function seedTest() {
         customerId: cust3._id.toString(),
         waterType: WaterType.HOMEWATER,
         packageId: hwPlatXLId,
-        adderIds: [],
+        adders: [],
         salesMargin: 0,
       },
       rep1Id,
@@ -381,7 +381,7 @@ async function seedTest() {
         customerId: cust4._id.toString(),
         waterType: WaterType.SUPREME,
         packageId: goldId,
-        adderIds: [],
+        adders: [],
         salesMargin: 200,
         financierId: fWithLoan ? fWithLoan._id.toString() : undefined,
         loanOptionId: fWithLoan
@@ -402,7 +402,7 @@ async function seedTest() {
         customerId: cust5._id.toString(),
         waterType: WaterType.SUPREME,
         packageId: silverId,
-        adderIds,
+        adders,
         salesMargin: 300,
         financierId: fWithLoan ? fWithLoan._id.toString() : undefined,
         loanOptionId: fWithLoan
