@@ -11,6 +11,18 @@ export class Adder {
   @Prop({ required: true, min: 0 })
   price: number;
 
+  /**
+   * Static = the rep must use `price` exactly, no input. Dynamic = the rep
+   * may raise the price by up to `maxExtra` on top of `price`, same shape as
+   * a package's sales margin.
+   */
+  @Prop({ type: String, enum: ['static', 'dynamic'], default: 'static' })
+  pricingMode: 'static' | 'dynamic';
+
+  /** Dynamic only. null = no ceiling (rep may add any amount). */
+  @Prop({ type: Number, default: null, min: 0 })
+  maxExtra: number | null;
+
   @Prop({ default: true })
   isActive: boolean;
 

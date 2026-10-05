@@ -36,7 +36,7 @@ const POPULATE = [
     path: 'package',
     select: 'name price waterType inclusions maxMargin imageUrl',
   },
-  { path: 'adders', select: 'name price imageUrl' },
+  { path: 'adders', select: 'name price pricingMode maxExtra imageUrl' },
   { path: 'financier', select: 'name' },
 ];
 
@@ -45,6 +45,7 @@ interface PricedProposal {
   waterType: string;
   package: string;
   adders: string[];
+  adderPrices: Record<string, number>;
   addersTotal: number;
   salesMargin: number;
   cashPrice: number;
@@ -98,19 +99,43 @@ export class ProposalsService {
 
     // Only adders actually applicable to this package may be attached, and
     // inactive ones are rejected rather than silently priced at zero.
-    const adderIds = dto.adderIds ?? [];
+    const requestedAdders = dto.adders ?? [];
+    const adderIds = requestedAdders.map((a) => a.adderId);
     let addersTotal = 0;
+    const adderPrices: Record<string, number> = {};
     if (adderIds.length > 0) {
       const applicable = await this.addersService.findAll(dto.packageId);
-      const selected = applicable.filter(
-        (a) => adderIds.includes(a._id.toString()) && a.isActive,
-      );
+      const byId = new Map(applicable.map((a) => [a._id.toString(), a]));
+      const selected = adderIds
+        .map((id) => byId.get(id))
+        .filter((a): a is NonNullable<typeof a> => !!a && a.isActive);
       if (selected.length !== adderIds.length) {
         throw new BadRequestException(
           'One or more selected adders are inactive or not available for this package.',
         );
       }
-      addersTotal = selected.reduce((sum, a) => sum + a.price, 0);
+
+      for (const requested of requestedAdders) {
+        const adder = byId.get(requested.adderId)!;
+        if (adder.pricingMode !== 'dynamic') {
+          // Static — the catalog price is authoritative; a client-supplied
+          // price is simply ignored rather than trusted.
+          adderPrices[requested.adderId] = adder.price;
+          continue;
+        }
+        const chosen = requested.price ?? adder.price;
+        const ceiling =
+          adder.maxExtra != null ? adder.price + adder.maxExtra : null;
+        if (chosen < adder.price || (ceiling != null && chosen > ceiling)) {
+          throw new BadRequestException(
+            ceiling != null
+              ? `"${adder.name}" must be priced between $${adder.price} and $${ceiling}.`
+              : `"${adder.name}" cannot be priced below $${adder.price}.`,
+          );
+        }
+        adderPrices[requested.adderId] = chosen;
+      }
+      addersTotal = Object.values(adderPrices).reduce((sum, p) => sum + p, 0);
     }
 
     // Margin policy, resolved across the package and its product (scope §11).
@@ -188,6 +213,7 @@ export class ProposalsService {
       waterType: dto.waterType,
       package: dto.packageId,
       adders: adderIds,
+      adderPrices,
       addersTotal,
       salesMargin: dto.salesMargin,
       cashPrice,
@@ -306,19 +332,27 @@ export class ProposalsService {
       dto.customerId,
       dto.waterType,
       dto.packageId,
-      dto.adderIds,
+      dto.adders,
       dto.salesMargin,
       dto.financierId,
       dto.loanOptionId,
     ].some((f) => f !== undefined);
 
     if (touchesPricing) {
+      // Re-quoting an unchanged adder list must carry forward the price the
+      // rep actually chose last time, not fall back to the current catalog
+      // price for a dynamic adder — that would silently reset their choice.
+      const existingAdders = existing.adders.map((a) => {
+        const id = idOf(a);
+        return { adderId: id, price: existing.adderPrices?.get(id) };
+      });
+
       const priced = await this.price(
         {
           customerId: dto.customerId ?? idOf(existing.customer),
           waterType: dto.waterType ?? existing.waterType,
           packageId: dto.packageId ?? idOf(existing.package),
-          adderIds: dto.adderIds ?? existing.adders.map(idOf),
+          adders: dto.adders ?? existingAdders,
           salesMargin: dto.salesMargin ?? existing.salesMargin,
           financierId:
             dto.financierId ??
