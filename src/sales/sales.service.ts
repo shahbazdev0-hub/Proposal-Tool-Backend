@@ -57,10 +57,18 @@ export class SalesService {
 
     const salesRep = await this.usersService.findByIdLean(dto.salesRep);
 
+    // What the customer is actually paying, net of the lender's dealer fee —
+    // the basis for a Static percent commission. Cash sales have fee 0, which
+    // collapses this to loanAmount itself.
+    const cashPrice = dto.loanAmount * (1 - dealerFeePercent / 100);
+
     const commissions = calculateCommission({
       waterType: dto.waterType,
       package: {
         price: pkg.price,
+        pricingMode: pkg.pricingMode,
+        repCommissionType: pkg.repCommissionType,
+        repCommissionValue: pkg.repCommissionValue,
         repCommissionFlat: pkg.repCommissionFlat,
         overrides: pkg.overrides,
         nickOverride: pkg.nickOverride,
@@ -68,6 +76,7 @@ export class SalesService {
       loanAmount: dto.loanAmount,
       dealerFeePercent,
       addersTotal,
+      cashPrice,
     });
 
     // Mongoose may not auto-cast stored string IDs to ObjectId on these fields;
@@ -217,17 +226,24 @@ export class SalesService {
       return new Types.ObjectId(val.toString());
     };
 
+    const loanAmount = dto.loanAmount ?? existing.loanAmount;
+    const cashPrice = loanAmount * (1 - dealerFeePercent / 100);
+
     const commissions = calculateCommission({
       waterType: dto.waterType ?? existing.waterType,
       package: {
         price: pkg.price,
+        pricingMode: pkg.pricingMode,
+        repCommissionType: pkg.repCommissionType,
+        repCommissionValue: pkg.repCommissionValue,
         repCommissionFlat: pkg.repCommissionFlat,
         overrides: pkg.overrides,
         nickOverride: pkg.nickOverride,
       },
-      loanAmount: dto.loanAmount ?? existing.loanAmount,
+      loanAmount,
       dealerFeePercent,
       addersTotal,
+      cashPrice,
     });
 
     const updated = await this.saleModel
