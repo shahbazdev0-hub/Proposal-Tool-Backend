@@ -48,19 +48,42 @@ export class PackagesService {
 
   /**
    * Scope §11: the ceiling is settable "by package/product". A package-level
-   * value always wins; null means inherit the product's. Either level can
-   * switch margin off entirely, and disabling at the product level disables it
-   * for every package underneath.
+   * value always wins; null means inherit the product's. Static pricing (or
+   * the product disabling margin) switches margin off entirely.
+   *
+   * pricingMode is the single source of truth going forward; packages written
+   * before it existed fall back to the deprecated marginEnabled/maxMargin
+   * pair so they keep behaving exactly as before until re-saved through the
+   * admin form, which always writes pricingMode.
    */
   static resolveMarginPolicy(
-    pkg: Pick<Package, 'marginEnabled' | 'maxMargin'>,
+    pkg: Pick<
+      Package,
+      | 'pricingMode'
+      | 'maxMarginType'
+      | 'maxMarginValue'
+      | 'price'
+      | 'marginEnabled'
+      | 'maxMargin'
+    >,
     product: Pick<ConfigOption, 'marginEnabled' | 'maxMargin'> | null,
   ): MarginPolicy {
-    const enabled =
-      (product?.marginEnabled ?? true) && (pkg.marginEnabled ?? true);
-    if (!enabled) return { enabled: false, cap: 0, source: 'none' };
-    if (pkg.maxMargin != null) {
+    const isStatic = pkg.pricingMode
+      ? pkg.pricingMode === 'static'
+      : !(pkg.marginEnabled ?? true);
+    const productAllows = product?.marginEnabled ?? true;
+    if (isStatic || !productAllows) return { enabled: false, cap: 0, source: 'none' };
+
+    if (pkg.pricingMode == null && pkg.maxMargin != null) {
+      // Pre-migration package — honour its flat $ cap verbatim.
       return { enabled: true, cap: pkg.maxMargin, source: 'package' };
+    }
+    if (pkg.maxMarginValue != null) {
+      const cap =
+        pkg.maxMarginType === 'percent'
+          ? (pkg.price * pkg.maxMarginValue) / 100
+          : pkg.maxMarginValue;
+      return { enabled: true, cap, source: 'package' };
     }
     if (product?.maxMargin != null) {
       return { enabled: true, cap: product.maxMargin, source: 'product' };
@@ -185,7 +208,11 @@ export class PackagesService {
     }
   }
 
-  // Nick's override must never reach a non-admin client — strip it at the edge.
+  // Nick's override, and the Static-pricing flat/percent commission fields,
+  // must never reach a non-admin client — strip them at the edge. The
+  // commission fields are admin-only "for the time being" per the client's
+  // request; reps still see pricingMode itself (it affects what price input
+  // they're shown) but not the dollar/percent commission figure behind it.
   static sanitizeForRole(
     pkg: PackageDocument,
     role: Role,
@@ -194,7 +221,7 @@ export class PackagesService {
     if (role === Role.ADMIN) {
       return plain;
     }
-    const { nickOverride, ...rest } = plain;
+    const { nickOverride, repCommissionType, repCommissionValue, repCommissionFlat, ...rest } = plain;
     return rest;
   }
 }
