@@ -1,14 +1,12 @@
 import { Type } from 'class-transformer';
 import {
-  IsBoolean,
+  IsEnum,
   IsNumber,
   IsOptional,
   IsString,
   Min,
-  ValidateIf,
   ValidateNested,
 } from 'class-validator';
-import { WaterType } from '../../common/enums/water-type.enum';
 import { PackageOverridesDto } from './package-overrides.dto';
 
 export class CreatePackageDto {
@@ -25,12 +23,6 @@ export class CreatePackageDto {
   @IsNumber()
   @Min(0)
   price: number;
-
-  // Required for Homewater packages (flat rep commission); ignored for Supreme.
-  @ValidateIf((dto: CreatePackageDto) => dto.waterType === WaterType.HOMEWATER)
-  @IsNumber()
-  @Min(0)
-  repCommissionFlat?: number;
 
   @ValidateNested()
   @Type(() => PackageOverridesDto)
@@ -50,12 +42,26 @@ export class CreatePackageDto {
   imageUrl?: string | null;
 
   @IsOptional()
-  @IsBoolean()
-  marginEnabled?: boolean;
+  @IsEnum(['static', 'dynamic'])
+  pricingMode?: 'static' | 'dynamic';
 
-  /** null = inherit the product-level ceiling. */
+  @IsOptional()
+  @IsEnum(['flat', 'percent'])
+  maxMarginType?: 'flat' | 'percent';
+
+  /** Dynamic only. null = inherit the product-level ceiling (always flat $). */
   @IsOptional()
   @IsNumber()
   @Min(0)
-  maxMargin?: number | null;
+  maxMarginValue?: number | null;
+
+  @IsOptional()
+  @IsEnum(['flat', 'percent'])
+  repCommissionType?: 'flat' | 'percent';
+
+  /** Static only — flat $ or percent Sales Rep commission. */
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  repCommissionValue?: number | null;
 }
