@@ -36,7 +36,42 @@ export class Package {
   @Prop({ required: true, min: 0 })
   price: number;
 
-  // Homewater only — flat Sales Rep commission. Null for Supreme (computed dynamically per sale).
+  /**
+   * Static = the rep cannot move the price at all; commission is this package's
+   * own flat/percent commission value below, overriding the water-type-based
+   * formula in commission-engine.ts. Dynamic = the rep may add margin up to
+   * maxMarginValue (flat or percent); commission follows the normal per-sale
+   * waterfall. Replaces the old marginEnabled boolean — the two states aren't
+   * independent, so one switch is the single source of truth.
+   */
+  @Prop({ type: String, enum: ['static', 'dynamic'], default: 'dynamic' })
+  pricingMode: 'static' | 'dynamic';
+
+  /** Dynamic only. Whether maxMarginValue is a dollar ceiling or a percent of price. */
+  @Prop({ type: String, enum: ['flat', 'percent'], default: 'flat' })
+  maxMarginType: 'flat' | 'percent';
+
+  /**
+   * Dynamic only. null = inherit the product's ceiling (ConfigOption.maxMargin
+   * for this package's productType, always flat $). A number is an explicit
+   * override in whatever unit maxMarginType says, including 0.
+   */
+  @Prop({ type: Number, default: null, min: 0 })
+  maxMarginValue: number | null;
+
+  /** Static only. Whether repCommissionValue is a flat dollar amount or a percent of cash price. */
+  @Prop({ type: String, enum: ['flat', 'percent'], default: 'flat' })
+  repCommissionType: 'flat' | 'percent';
+
+  /** Static only — flat or percent Sales Rep commission, replacing the
+   *  water-type-based formula. Null = fall back to that formula (e.g. a
+   *  Static package that hasn't had a commission value configured yet). */
+  @Prop({ type: Number, default: null, min: 0 })
+  repCommissionValue: number | null;
+
+  // Deprecated — superseded by repCommissionType/repCommissionValue above,
+  // kept only so existing Homewater packages written before this field
+  // existed keep working until re-saved. Do not use in new code.
   @Prop({ type: Number, default: null })
   repCommissionFlat: number | null;
 
@@ -57,20 +92,15 @@ export class Package {
   @Prop({ type: String, trim: true, default: null })
   imageUrl: string | null;
 
-  /**
-   * Whether a rep may add any sales margin to this package (scope §11,
-   * "enable/disable margin where necessary"). Kept separate from maxMargin so
-   * "margin is switched off" and "the ceiling happens to be zero" stay
-   * distinguishable — an admin reading a 0 can otherwise not tell which.
-   */
+  // Deprecated — superseded by pricingMode (false ≈ "static", true ≈
+  // "dynamic"). Kept only for the one-time migration that backfills
+  // pricingMode on packages written before this field existed; do not read
+  // this in new code.
   @Prop({ default: true })
   marginEnabled: boolean;
 
-  /**
-   * Maximum sales margin in dollars. null = inherit the product's ceiling
-   * (ConfigOption.maxMargin for this package's productType). A number is an
-   * explicit override, including 0.
-   */
+  // Deprecated — superseded by maxMarginType/maxMarginValue above. Kept only
+  // for the migration backfill; do not read this in new code.
   @Prop({ type: Number, default: null, min: 0 })
   maxMargin: number | null;
 
