@@ -562,7 +562,6 @@ export class ProposalPdfService {
     if (p.addersTotal + p.salesMargin > 0) {
       line('Upgrades', money(p.addersTotal + p.salesMargin));
     }
-    line('Total cash price', money(p.cashPrice), 'total');
 
     if (p.financier) {
       line('Amount financed', money2(p.financedAmount), 'total');
